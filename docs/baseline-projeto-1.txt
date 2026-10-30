@@ -243,3 +243,86 @@ HTTP 200
 }
 
 HTTP 200
+{
+  "dados": {
+    "pedido_id": 1,
+    "total": 5999.99
+  },
+  "mensagem": "Pedido criado com sucesso",
+  "sucesso": true
+}
+
+HTTP 201
+== GET /produtos/busca?q=mouse
+{
+  "dados": [
+    {
+      "ativo": 1,
+      "categoria": "informatica",
+      "criado_em": "2026-10-30 17:21:28",
+      "descricao": "Mouse sem fio ergon\u00f4mico",
+      "estoque": 50,
+      "id": 2,
+      "nome": "Mouse Wireless",
+      "preco": 89.9
+    }
+  ],
+  "sucesso": true,
+  "total": 1
+}
+
+HTTP 200
+== GET /pedidos/usuario/2
+{
+  "dados": [
+    {
+      "criado_em": "2026-10-30 22:04:33",
+      "id": 1,
+      "itens": [
+        {
+          "preco_unitario": 5999.99,
+          "produto_id": 1,
+          "produto_nome": "Notebook Gamer",
+          "quantidade": 1
+        }
+      ],
+      "status": "pendente",
+      "total": 5999.99,
+      "usuario_id": 2
+    }
+  ],
+  "sucesso": true
+}
+
+HTTP 200
+== PUT /pedidos/1/status
+{
+  "mensagem": "Status atualizado",
+  "sucesso": true
+}
+
+HTTP 200
+== POST /produtos
+{
+  "dados": {
+    "id": 11
+  },
+  "mensagem": "Produto criado",
+  "sucesso": true
+}
+
+HTTP 201
+== PUT /produtos/11
+{
+  "mensagem": "Produto atualizado",
+  "sucesso": true
+}
+
+HTTP 200
+== DELETE /produtos/11
+{
+  "mensagem": "Produto deletado",
+  "sucesso": true
+}
+
+HTTP 200
