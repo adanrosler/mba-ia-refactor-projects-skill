@@ -7,7 +7,7 @@ auditoria de anti-patterns e refatora para MVC. Deve funcionar nos 3 projetos do
 - `ecommerce-api-legacy/` — Node.js/Express, LMS com checkout, God Class (porta 3000)
 - `task-manager-api/` — Python/Flask, task manager, já em camadas (porta 5000, rodar `seed.py` antes)
 
-Enunciado completo e critérios: ver o README do desafio (requisitos resumidos abaixo).
+**Enunciado completo e oficial: `docs/enunciado-desafio.md` — é a fonte da verdade; em caso de dúvida, ele prevalece sobre este resumo.**
 
 ## Status
 - [x] Etapa 0 — baseline de endpoints: `docs/baseline-projeto-{1,2,3}.txt`; smoke tests: `scripts/smoke-projeto-{1,2,3}.sh`
