@@ -1,0 +1,12 @@
+== POST /api/checkout (sucesso)
+{"msg":"Sucesso","enrollment_id":2}
+HTTP 200
+== POST /api/checkout (recusado)
+Pagamento recusado
+HTTP 400
+== GET /api/admin/financial-report
+[{"course":"Clean Architecture","revenue":997,"students":[{"student":"Leonan","paid":997}]},{"course":"Docker","revenue":497,"students":[{"student":"Guilherme","paid":497}]}]
+HTTP 200
+== DELETE /api/users/1
+Usuário deletado, mas as matrículas e pagamentos ficaram sujos no banco.
+HTTP 200
