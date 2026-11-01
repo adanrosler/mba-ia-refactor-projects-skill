@@ -1,88 +1,75 @@
-from flask import Flask, jsonify, request
+import logging
+
+from flask import Flask
 from flask_cors import CORS
-import controllers
-from database import get_db
 
-app = Flask(__name__)
-app.config["SECRET_KEY"] = "minha-chave-super-secreta-123"
-app.config["DEBUG"] = True
-CORS(app)
+from config.settings import APP_VERSION, Settings
+from controllers.admin_controller import AdminController
+from controllers.health_controller import HealthController
+from controllers.pedido_controller import PedidoController
+from controllers.produto_controller import ProdutoController
+from controllers.relatorio_controller import RelatorioController
+from controllers.usuario_controller import UsuarioController
+from middlewares.error_handler import register_error_handlers
+from models import database
+from models.admin_model import AdminModel
+from models.pedido_model import PedidoModel
+from models.produto_model import ProdutoModel
+from models.relatorio_model import RelatorioModel
+from models.seed import seed_if_empty
+from models.usuario_model import UsuarioModel, migrar_senhas_texto_puro
+from services.notification_service import NotificationService
+from views.admin_routes import build_admin_routes
+from views.health_routes import build_health_routes
+from views.pedido_routes import build_pedido_routes
+from views.produto_routes import build_produto_routes
+from views.relatorio_routes import build_relatorio_routes
+from views.root_routes import build_root_routes
+from views.usuario_routes import build_usuario_routes
 
-app.add_url_rule("/produtos", "listar_produtos", controllers.listar_produtos, methods=["GET"])
-app.add_url_rule("/produtos/busca", "buscar_produtos", controllers.buscar_produtos, methods=["GET"])
-app.add_url_rule("/produtos/<int:id>", "buscar_produto", controllers.buscar_produto, methods=["GET"])
-app.add_url_rule("/produtos", "criar_produto", controllers.criar_produto, methods=["POST"])
-app.add_url_rule("/produtos/<int:id>", "atualizar_produto", controllers.atualizar_produto, methods=["PUT"])
-app.add_url_rule("/produtos/<int:id>", "deletar_produto", controllers.deletar_produto, methods=["DELETE"])
+logger = logging.getLogger(__name__)
 
-app.add_url_rule("/usuarios", "listar_usuarios", controllers.listar_usuarios, methods=["GET"])
-app.add_url_rule("/usuarios/<int:id>", "buscar_usuario", controllers.buscar_usuario, methods=["GET"])
-app.add_url_rule("/usuarios", "criar_usuario", controllers.criar_usuario, methods=["POST"])
-app.add_url_rule("/login", "login", controllers.login, methods=["POST"])
 
-app.add_url_rule("/pedidos", "criar_pedido", controllers.criar_pedido, methods=["POST"])
-app.add_url_rule("/pedidos", "listar_todos_pedidos", controllers.listar_todos_pedidos, methods=["GET"])
-app.add_url_rule("/pedidos/usuario/<int:usuario_id>", "listar_pedidos_usuario", controllers.listar_pedidos_usuario, methods=["GET"])
-app.add_url_rule("/pedidos/<int:pedido_id>/status", "atualizar_status_pedido", controllers.atualizar_status_pedido, methods=["PUT"])
+def _warn_insecure_defaults(config):
+    if not Settings.SECRET_KEY_FROM_ENV:
+        logger.warning("SECRET_KEY não definida; usando chave aleatória (não persiste entre restarts)")
+    if not config["ADMIN_TOKEN"]:
+        logger.warning("ADMIN_TOKEN não definido; rotas administrativas/sensíveis respondem sem autenticação")
+    if config["ENABLE_ADMIN_ENDPOINTS"]:
+        logger.warning("ENABLE_ADMIN_ENDPOINTS ativo: /admin/query e /admin/reset-db habilitados")
 
-app.add_url_rule("/relatorios/vendas", "relatorio_vendas", controllers.relatorio_vendas, methods=["GET"])
 
-app.add_url_rule("/health", "health_check", controllers.health_check, methods=["GET"])
+def create_app(settings=Settings):
+    logging.basicConfig(level=settings.LOG_LEVEL,
+                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
-@app.route("/")
-def index():
-    return jsonify({
-        "mensagem": "Bem-vindo à API da Loja",
-        "versao": "1.0.0",
-        "endpoints": {
-            "produtos": "/produtos",
-            "usuarios": "/usuarios",
-            "pedidos": "/pedidos",
-            "login": "/login",
-            "relatorios": "/relatorios/vendas",
-            "health": "/health"
-        }
-    })
+    app = Flask(__name__)
+    app.config.from_object(settings)
+    app.config["APP_VERSION"] = APP_VERSION
+    CORS(app)
 
-@app.route("/admin/reset-db", methods=["POST"])
-def reset_database():
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute("DELETE FROM itens_pedido")
-    cursor.execute("DELETE FROM pedidos")
-    cursor.execute("DELETE FROM produtos")
-    cursor.execute("DELETE FROM usuarios")
-    db.commit()
-    print("!!! BANCO DE DADOS RESETADO !!!")
-    return jsonify({"mensagem": "Banco de dados resetado", "sucesso": True}), 200
+    database.init_app(app, on_init=(seed_if_empty, migrar_senhas_texto_puro))
 
-@app.route("/admin/query", methods=["POST"])
-def executar_query():
-    dados = request.get_json()
-    query = dados.get("sql", "")
-    if not query:
-        return jsonify({"erro": "Query não informada"}), 400
+    get_db = database.get_db
+    produtos = ProdutoModel(get_db)
+    usuarios = UsuarioModel(get_db)
+    pedidos = PedidoModel(get_db)
 
-    db = get_db()
-    cursor = db.cursor()
-    try:
-        cursor.execute(query)
-        if query.strip().upper().startswith("SELECT"):
-            rows = cursor.fetchall()
-            result = [dict(row) for row in rows]
-            return jsonify({"dados": result, "sucesso": True}), 200
-        else:
-            db.commit()
-            return jsonify({"mensagem": "Query executada", "sucesso": True}), 200
-    except Exception as e:
-        return jsonify({"erro": str(e)}), 500
+    app.register_blueprint(build_root_routes())
+    app.register_blueprint(build_produto_routes(ProdutoController(produtos)))
+    app.register_blueprint(build_usuario_routes(UsuarioController(usuarios)))
+    app.register_blueprint(build_pedido_routes(PedidoController(pedidos, produtos, NotificationService())))
+    app.register_blueprint(build_relatorio_routes(RelatorioController(RelatorioModel(get_db))))
+    app.register_blueprint(build_health_routes(HealthController(produtos, usuarios, pedidos, app.config)))
+    app.register_blueprint(build_admin_routes(AdminController(AdminModel(get_db))))
+
+    register_error_handlers(app)
+    _warn_insecure_defaults(app.config)
+    return app
+
+
+app = create_app()
 
 if __name__ == "__main__":
-
-    get_db()
-    print("=" * 50)
-    print("SERVIDOR INICIADO")
-    print("Rodando em http://localhost:5000")
-    print("=" * 50)
-
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    logger.info("Servidor iniciado em http://%s:%s", Settings.HOST, Settings.PORT)
+    app.run(host=Settings.HOST, port=Settings.PORT, debug=Settings.DEBUG)

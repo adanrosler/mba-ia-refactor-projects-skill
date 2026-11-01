@@ -1,0 +1,48 @@
+--- listen:
+Python  444 adanrosler    3u  IPv4 0xce58319628b38c7b      0t0  TCP 127.0.0.1:5000 (LISTEN)
+✓ GET / → 200
+✓ GET /health → 200
+✓ GET /produtos → 200
+✓ GET /produtos/1 → 200
+✓ GET /produtos/busca?q=mouse → 200
+✓ GET /usuarios → 200
+✓ GET /usuarios/1 → 200
+✓ POST /login → 200
+✓ POST /pedidos → 201
+✓ GET /pedidos → 200
+✓ GET /pedidos/usuario/2 → 200
+✓ PUT /pedidos/1/status → 200
+✓ GET /relatorios/vendas → 200
+✓ POST /produtos → 201
+/private/tmp/claude-501/-Users-adanrosler-dev-mba-ia-refactor-projects-skill/c498b000-7f62-4d8e-9576-2a0840a73956/scratchpad/validate.sh: line 16:   444 Terminated: 15          HOST=127.0.0.1 PORT=$PORT $CMD > $LOG 2>&1
+--- server log:
+2026-11-01 13:58:06,702 WARNING __main__: SECRET_KEY não definida; usando chave aleatória (não persiste entre restarts)
+2026-11-01 13:58:06,702 WARNING __main__: ADMIN_TOKEN não definido; rotas administrativas/sensíveis respondem sem autenticação
+2026-11-01 13:58:06,702 INFO __main__: Servidor iniciado em http://127.0.0.1:5000
+ * Serving Flask app 'app'
+ * Debug mode: off
+2026-11-01 13:58:41,724 INFO werkzeug: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2026-11-01 13:58:41,724 INFO werkzeug: [33mPress CTRL+C to quit[0m
+2026-11-01 13:58:41,979 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:41] "GET / HTTP/1.1" 200 -
+2026-11-01 13:58:42,130 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:42] "GET / HTTP/1.1" 200 -
+2026-11-01 13:58:42,158 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:42] "GET /health HTTP/1.1" 200 -
+2026-11-01 13:58:42,185 INFO controllers.produto_controller: Listando 10 produtos
+2026-11-01 13:58:42,185 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:42] "GET /produtos HTTP/1.1" 200 -
+2026-11-01 13:58:42,211 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:42] "GET /produtos/1 HTTP/1.1" 200 -
+2026-11-01 13:58:42,235 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:42] "GET /produtos/busca?q=mouse HTTP/1.1" 200 -
+2026-11-01 13:58:42,260 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:42] "GET /usuarios HTTP/1.1" 200 -
+2026-11-01 13:58:42,289 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:42] "GET /usuarios/1 HTTP/1.1" 200 -
+2026-11-01 13:58:42,382 INFO controllers.usuario_controller: Login bem-sucedido: id=2
+2026-11-01 13:58:42,383 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:42] "POST /login HTTP/1.1" 200 -
+2026-11-01 13:58:42,417 INFO services.notification_service: ENVIANDO EMAIL: Pedido 1 criado para usuario 2
+2026-11-01 13:58:42,417 INFO services.notification_service: ENVIANDO SMS: Seu pedido foi recebido!
+2026-11-01 13:58:42,417 INFO services.notification_service: ENVIANDO PUSH: Novo pedido recebido pelo sistema
+2026-11-01 13:58:42,417 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:42] "[35m[1mPOST /pedidos HTTP/1.1[0m" 201 -
+2026-11-01 13:58:42,447 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:42] "GET /pedidos HTTP/1.1" 200 -
+2026-11-01 13:58:42,475 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:42] "GET /pedidos/usuario/2 HTTP/1.1" 200 -
+2026-11-01 13:58:42,507 INFO services.notification_service: NOTIFICAÇÃO: Pedido 1 foi aprovado! Preparar envio.
+2026-11-01 13:58:42,507 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:42] "PUT /pedidos/1/status HTTP/1.1" 200 -
+2026-11-01 13:58:42,532 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:42] "GET /relatorios/vendas HTTP/1.1" 200 -
+2026-11-01 13:58:42,563 INFO controllers.produto_controller: Produto criado com ID: 11
+2026-11-01 13:58:42,563 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 13:58:42] "[35m[1mPOST /produtos HTTP/1.1[0m" 201 -

@@ -26,3 +26,17 @@ Decisões tomadas:
   Node via shim `-r` que injeta `127.0.0.1` no `listen`.
 - Varredura "generalizar, nunca decorar": exemplos com valores dos projetos foram trocados por
   genéricos.
+
+## Etapa 2/3 — Projeto 1 (code-smells-project) — ✅ iteração 1
+- Fases 1–2: `claude -p "/refactor-arch"` (sessão nova, `--dangerously-skip-permissions`),
+  7 turnos, ~US$0,75. Nenhum arquivo alterado antes da confirmação (`git status` limpo).
+  Relatório: 19 findings (CRITICAL 7 | HIGH 3 | MEDIUM 5 | LOW 4) → `reports/audit-project-1.md`.
+  Cobre os 11 achados manuais do P1.
+- Fase 3: `claude -p "y" --resume <session>` (16 turnos, ~9,7 min, ~US$2,39). Estrutura MVC
+  completa (config/, models/, controllers/, views/, services/, middlewares/, validators/);
+  `controllers.py`, `models.py`, `database.py` removidos. Validação da skill: 36/38 requisições
+  iguais à baseline (as 2 diferenças = `/health` sem `secret_key`/`db_path`, intencional).
+- Validação externa: `scripts/smoke-projeto-1.sh` → **14/14 ✓**, servidor em 127.0.0.1:5000
+  (log em `docs/logs/smoke-projeto-1.txt`; saída da Fase 3 em `docs/logs/fase3-projeto-1.md`).
+- Observação: o boot do Flask leva ~35 s nesta máquina (inclusive um app Flask mínimo) — é do
+  ambiente, não da refatoração.
