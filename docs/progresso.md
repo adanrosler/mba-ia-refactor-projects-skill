@@ -56,3 +56,22 @@ Decisões tomadas:
   ("Usuário deletado", agora com exclusão em cascata em transação — documentado).
 - Pendência aceita: pacotes transitivos deprecated do `sqlite3@5` (exigiria trocar dependência ou
   versão do Node); registrada no relatório.
+
+## Etapa 2/3 — Projeto 3 (task-manager-api) — ✅ iteração 1
+- Skill copiada sem alterações. Fases 1–2 (sessão nova, rodada em paralelo com a Fase 3 do P2 —
+  portas diferentes, só leitura): 11 turnos, ~US$0,86. Detectou Python 3.13 + Flask 3.0 +
+  Flask-SQLAlchemy, domínio Task Manager, "parcialmente em camadas" → estratégia incremental.
+  16 findings (CRITICAL 3 | HIGH 3 | MEDIUM 6 | LOW 4) → `reports/audit-project-3.md`.
+  Cobre os 12 achados manuais (deprecated: `datetime.utcnow`, `Query.get`, deps não usadas).
+- Fase 3: 27 turnos, ~8,4 min, ~US$3,34. Mantidos `models/`, `routes/`, `services/`,
+  `database.py`, `seed.py`; criados `config/`, `controllers/`, `validators/`, `middlewares/`;
+  CRUD de categorias saiu do blueprint de relatórios; `utils/helpers.py` (morto) removido.
+  Validação da skill: 62/62 requisições compatíveis com a baseline (diferenças só em `password`
+  removido e token assinado).
+- Validação externa: `seed.py` OK + `scripts/smoke-projeto-3.sh` → **22/22 ✓** em 127.0.0.1:5000.
+- Observação: o sandbox da sessão headless não preservou o diretório do `mktemp -d` entre
+  comandos; a skill contornou usando `~/refactor-arch-tmp.*` e limpou ao final.
+
+## Resumo das iterações
+Nenhuma iteração extra foi necessária: os 3 projetos passaram na 1ª execução (critérios de
+aceite e smoke externo). Os references não foram alterados após a Etapa 1.

@@ -1,0 +1,61 @@
+--- listen:
+Python  4480 adanrosler    4u  IPv4 0x3926342ca45b96fe      0t0  TCP 127.0.0.1:5000 (LISTEN)
+✓ GET / → 200
+✓ GET /health → 200
+✓ GET /tasks → 200
+✓ GET /tasks/1 → 200
+✓ GET /tasks/search?q=login → 200
+✓ GET /tasks/stats → 200
+✓ GET /users → 200
+✓ GET /users/1 → 200
+✓ GET /users/1/tasks → 200
+✓ GET /reports/summary → 200
+✓ GET /reports/user/1 → 200
+✓ GET /categories → 200
+✓ POST /login → 200
+✓ POST /users → 201
+✓ PUT /users/:id → 200
+✓ POST /tasks → 201
+✓ PUT /tasks/:id → 200
+✓ DELETE /tasks/:id → 200
+✓ POST /categories → 201
+✓ PUT /categories/:id → 200
+✓ DELETE /categories/:id → 200
+✓ DELETE /users/:id → 200
+/private/tmp/claude-501/-Users-adanrosler-dev-mba-ia-refactor-projects-skill/c498b000-7f62-4d8e-9576-2a0840a73956/scratchpad/validate.sh: line 16:  4480 Terminated: 15          HOST=127.0.0.1 PORT=$PORT $CMD > $LOG 2>&1
+--- server log:
+2026-11-01 14:13:39,663 WARNING __main__: SECRET_KEY não definida; usando chave aleatória (tokens não sobrevivem a restarts)
+2026-11-01 14:13:39,663 WARNING __main__: AUTH_REQUIRED desativado: rotas sensíveis respondem sem autenticação
+ * Serving Flask app 'app'
+ * Debug mode: off
+2026-11-01 14:13:39,675 INFO werkzeug: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2026-11-01 14:13:39,675 INFO werkzeug: [33mPress CTRL+C to quit[0m
+2026-11-01 14:13:40,079 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "GET / HTTP/1.1" 200 -
+2026-11-01 14:13:40,185 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "GET / HTTP/1.1" 200 -
+2026-11-01 14:13:40,216 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "GET /health HTTP/1.1" 200 -
+2026-11-01 14:13:40,253 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "GET /tasks HTTP/1.1" 200 -
+2026-11-01 14:13:40,281 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "GET /tasks/1 HTTP/1.1" 200 -
+2026-11-01 14:13:40,315 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "GET /tasks/search?q=login HTTP/1.1" 200 -
+2026-11-01 14:13:40,350 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "GET /tasks/stats HTTP/1.1" 200 -
+2026-11-01 14:13:40,376 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "GET /users HTTP/1.1" 200 -
+2026-11-01 14:13:40,409 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "GET /users/1 HTTP/1.1" 200 -
+2026-11-01 14:13:40,439 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "GET /users/1/tasks HTTP/1.1" 200 -
+2026-11-01 14:13:40,475 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "GET /reports/summary HTTP/1.1" 200 -
+2026-11-01 14:13:40,505 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "GET /reports/user/1 HTTP/1.1" 200 -
+2026-11-01 14:13:40,536 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "GET /categories HTTP/1.1" 200 -
+2026-11-01 14:13:40,634 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "POST /login HTTP/1.1" 200 -
+2026-11-01 14:13:40,764 INFO controllers.user_controller: Usuário criado: id=4
+2026-11-01 14:13:40,765 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "[35m[1mPOST /users HTTP/1.1[0m" 201 -
+2026-11-01 14:13:40,880 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "PUT /users/4 HTTP/1.1" 200 -
+2026-11-01 14:13:40,935 INFO controllers.task_controller: Task criada: id=11
+2026-11-01 14:13:40,936 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:40] "[35m[1mPOST /tasks HTTP/1.1[0m" 201 -
+2026-11-01 14:13:41,039 INFO controllers.task_controller: Task atualizada: id=11
+2026-11-01 14:13:41,039 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:41] "PUT /tasks/11 HTTP/1.1" 200 -
+2026-11-01 14:13:41,088 INFO controllers.task_controller: Task deletada: id=11
+2026-11-01 14:13:41,089 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:41] "DELETE /tasks/11 HTTP/1.1" 200 -
+2026-11-01 14:13:41,169 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:41] "[35m[1mPOST /categories HTTP/1.1[0m" 201 -
+2026-11-01 14:13:41,302 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:41] "PUT /categories/5 HTTP/1.1" 200 -
+2026-11-01 14:13:41,366 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:41] "DELETE /categories/5 HTTP/1.1" 200 -
+2026-11-01 14:13:41,417 INFO controllers.user_controller: Usuário deletado: id=4
+2026-11-01 14:13:41,418 INFO werkzeug: 127.0.0.1 - - [01/Nov/2026 14:13:41] "DELETE /users/4 HTTP/1.1" 200 -
