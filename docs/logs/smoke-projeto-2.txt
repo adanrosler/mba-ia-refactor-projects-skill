@@ -1,0 +1,13 @@
+--- listen:
+node    3289 adanrosler   15u  IPv4 0x4b159b77b602ba46      0t0  TCP 127.0.0.1:3000 (LISTEN)
+✓ POST /api/checkout → 200
+✓ POST /api/checkout → 400
+✓ GET /api/admin/financial-report → 200
+✓ DELETE /api/users/1 → 200
+/private/tmp/claude-501/-Users-adanrosler-dev-mba-ia-refactor-projects-skill/c498b000-7f62-4d8e-9576-2a0840a73956/scratchpad/validate.sh: line 16:  3271 Terminated: 15          HOST=127.0.0.1 PORT=$PORT $CMD > $LOG 2>&1
+--- server log:
+[WARN] PAYMENT_GATEWAY_KEY não definida; gateway de pagamento em modo simulado
+[WARN] ADMIN_TOKEN não definida; rotas administrativas sem autenticação
+[INFO] LMS API rodando em http://127.0.0.1:3000
+[INFO] Processando pagamento de 497 no cartão ****4444
+[INFO] Processando pagamento de 997 no cartão ****4444

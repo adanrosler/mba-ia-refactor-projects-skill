@@ -40,3 +40,19 @@ Decisões tomadas:
   (log em `docs/logs/smoke-projeto-1.txt`; saída da Fase 3 em `docs/logs/fase3-projeto-1.md`).
 - Observação: o boot do Flask leva ~35 s nesta máquina (inclusive um app Flask mínimo) — é do
   ambiente, não da refatoração.
+
+## Etapa 2/3 — Projeto 2 (ecommerce-api-legacy) — ✅ iteração 1
+- Skill copiada sem alterações para `ecommerce-api-legacy/.claude/skills/refactor-arch/`.
+- Fases 1–2 (sessão nova): 6 turnos, ~US$0,63. Detectou Node.js 20 + Express 4 + SQLite em
+  memória, domínio LMS com checkout, God Class. 19 findings (CRITICAL 5 | HIGH 4 | MEDIUM 6 |
+  LOW 4) → `reports/audit-project-2.md`. Cobre os 13 achados manuais do P2 (deprecated: callbacks
+  sqlite3 + pacotes transitivos deprecated).
+- Fase 3 (`--resume` + "y"): 14 turnos, ~4,2 min, ~US$1,74. `AppManager.js` e `utils.js`
+  removidos; `src/` com config, database, models, controllers, routes, services, middlewares,
+  validators, errors, utils. Validação da skill: 11/14 iguais à baseline; 3 diferenças
+  intencionais (stack trace HTML → 400 texto; requisição que derrubava o processo → 400).
+- Validação externa: `scripts/smoke-projeto-2.sh` → **4/4 ✓** em 127.0.0.1:3000. Corpos conferidos
+  manualmente contra `docs/baseline-projeto-2.txt`: idênticos, exceto a mensagem do DELETE
+  ("Usuário deletado", agora com exclusão em cascata em transação — documentado).
+- Pendência aceita: pacotes transitivos deprecated do `sqlite3@5` (exigiria trocar dependência ou
+  versão do Node); registrada no relatório.
