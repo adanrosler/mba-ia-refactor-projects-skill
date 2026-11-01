@@ -75,3 +75,10 @@ Decisões tomadas:
 ## Resumo das iterações
 Nenhuma iteração extra foi necessária: os 3 projetos passaram na 1ª execução (critérios de
 aceite e smoke externo). Os references não foram alterados após a Etapa 1.
+
+## Etapa 5 — README final ✅
+- `README.md` reescrito com as seções A (análise manual), B (construção da skill), C (resultados:
+  findings por severidade, antes/depois, checklist preenchido por projeto, logs do smoke,
+  mudanças intencionais, comportamento por stack) e D (como executar).
+- Skills nos 3 projetos conferidas com `diff -r`: idênticas.
+- Status: desafio concluído; nenhum bloqueio pendente.

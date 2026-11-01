@@ -13,11 +13,11 @@ auditoria de anti-patterns e refatora para MVC. Deve funcionar nos 3 projetos do
 - [x] Etapa 0 — baseline de endpoints: `docs/baseline-projeto-{1,2,3}.txt`; smoke tests: `scripts/smoke-projeto-{1,2,3}.sh`
 - [x] Etapa 1 — análise manual: `docs/analise-manual-projeto-{1,2,3}.md` (8, 13 e 12 achados)
 - [x] Etapa 2 — design da skill: `docs/decisoes-design-skill.md`
-- [ ] Etapa 3 — escrever os 5 references (um por vez, com revisão humana entre eles)
-- [ ] Etapa 4 — escrever o SKILL.md
-- [ ] Etapa 5 — rodar no projeto 1 e iterar
-- [ ] Etapa 6 — copiar e rodar nos projetos 2 e 3
-- [ ] Etapa 7 — README final e entrega
+- [x] Etapa 3 — escrever os 5 references (um por vez, com revisão humana entre eles)
+- [x] Etapa 4 — escrever o SKILL.md
+- [x] Etapa 5 — rodar no projeto 1 e iterar
+- [x] Etapa 6 — copiar e rodar nos projetos 2 e 3
+- [x] Etapa 7 — README final e entrega
 
 ## Requisitos obrigatórios da skill
 - Path: `code-smells-project/.claude/skills/refactor-arch/` (nome `refactor-arch` e arquivo `SKILL.md` não podem mudar)
