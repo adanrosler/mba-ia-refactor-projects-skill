@@ -312,6 +312,23 @@ Python  4480 adanrosler    4u  IPv4 0x3926342ca45b96fe      0t0  TCP 127.0.0.1:5
 
 Os logs completos, incluindo o log de cada servidor, estão em `docs/logs/`.
 
+### Evidência: dados sensíveis fora do log (P2)
+
+Na versão original, cada checkout gravava no log o número completo do cartão e a chave live do gateway:
+
+```
+Processando cartão 4111222233334444 na chave pk_live_...
+```
+
+Log de boot e do checkout no P2 refatorado: a chave vem do ambiente (sem ela, o gateway roda em modo simulado), o cartão aparece mascarado e o servidor escuta só em `127.0.0.1`:
+
+```
+[WARN] PAYMENT_GATEWAY_KEY não definida; gateway de pagamento em modo simulado
+[WARN] ADMIN_TOKEN não definida; rotas administrativas sem autenticação
+[INFO] LMS API rodando em http://127.0.0.1:3000
+[INFO] Processando pagamento de 497 no cartão ****4444
+```
+
 ### Mudanças de comportamento intencionais (segurança)
 
 | Projeto | Mudança |
@@ -320,6 +337,8 @@ Os logs completos, incluindo o log de cada servidor, estão em `docs/logs/`.
 | P1 | `senha` sai de `/usuarios`. `secret_key`/`db_path` saem de `/health`. As senhas passam a ser guardadas com hash e são migradas no boot. `POST /admin/query` e `/admin/reset-db` ficam desligados por padrão (`ENABLE_ADMIN_ENDPOINTS=1` para ligar). `ADMIN_TOKEN` opcional. Entradas que antes davam 500 agora dão 400. |
 | P2 | `DELETE /api/users/:id` passa a apagar em cascata, numa transação, e responde "Usuário deletado" (antes admitia dados órfãos). Checkout recusado não cria mais o usuário. Sem `pwd`, a senha é aleatória em vez de "123456". O relatório sai em ordem determinística. `ADMIN_TOKEN` opcional. |
 | P3 | `password` sai de todas as respostas. MD5 → scrypt, com migração no login. O token do `/login` passa a ser assinado. `AUTH_REQUIRED=true` ativa autenticação e papéis. Entradas inválidas dão 400 e os erros saem em JSON. |
+
+**Trade-off de segurança:** a autenticação das rotas administrativas e sensíveis é *opt-in*, via variável de ambiente. Isso preserva os contratos originais que o desafio exige: por exemplo, o smoke espera `GET /api/admin/financial-report` → 200 sem credencial. Sem a variável, as rotas continuam abertas e o boot loga um aviso. **Em produção, defina `ADMIN_TOKEN` (P1 e P2) e `AUTH_REQUIRED=true` (P3)** para que essas rotas passem a exigir `Authorization: Bearer <token>`.
 
 ### Como a skill se comportou em stacks diferentes
 
@@ -361,20 +380,35 @@ Repita com `ecommerce-api-legacy/` e `task-manager-api/`. Para voltar um projeto
 
 ### Validar a refatoração
 
+Cada bloco é independente e começa na raiz do repositório. O servidor sobe em background e o loop `until curl ...` espera até ele responder (qualquer resposta HTTP serve; nesta máquina o Flask leva ~35 s). Só então o smoke roda e, por fim, o servidor é encerrado. P1 e P3 usam a mesma porta (5000), então rode um bloco por vez.
+
 ```bash
-# Projeto 1
-cd code-smells-project && .venv/bin/python app.py &                 # http://127.0.0.1:5000
-bash ../scripts/smoke-projeto-1.sh http://127.0.0.1:5000
+REPO=$(git rev-parse --show-toplevel)   # raiz do repositório
+wait_for() { until curl -s -o /dev/null "$1"; do sleep 1; done; }
 
-# Projeto 2
-cd ecommerce-api-legacy && npm start &                              # http://127.0.0.1:3000
-bash ../scripts/smoke-projeto-2.sh http://127.0.0.1:3000
+# Projeto 1 — code-smells-project (porta 5000)
+cd "$REPO/code-smells-project"
+.venv/bin/python app.py > /tmp/p1.log 2>&1 & PID=$!
+wait_for http://127.0.0.1:5000/
+bash "$REPO/scripts/smoke-projeto-1.sh" http://127.0.0.1:5000
+kill $PID
 
-# Projeto 3
-cd task-manager-api && .venv/bin/python seed.py && .venv/bin/python app.py &
-bash ../scripts/smoke-projeto-3.sh http://127.0.0.1:5000
+# Projeto 2 — ecommerce-api-legacy (porta 3000)
+cd "$REPO/ecommerce-api-legacy"
+node src/app.js > /tmp/p2.log 2>&1 & PID=$!     # o mesmo que "npm start"
+wait_for http://127.0.0.1:3000/                 # a rota "/" responde 404, mas já indica que o servidor subiu
+bash "$REPO/scripts/smoke-projeto-2.sh" http://127.0.0.1:3000
+kill $PID
+
+# Projeto 3 — task-manager-api (porta 5000; seed antes)
+cd "$REPO/task-manager-api"
+.venv/bin/python seed.py
+.venv/bin/python app.py > /tmp/p3.log 2>&1 & PID=$!
+wait_for http://127.0.0.1:5000/
+bash "$REPO/scripts/smoke-projeto-3.sh" http://127.0.0.1:5000
+kill $PID
 ```
-Todas as linhas devem começar com `✓`. Encerre o servidor depois (`kill %1`).
+Todas as linhas do smoke devem começar com `✓`. O log de cada servidor fica em `/tmp/pN.log`.
 
 Variáveis de ambiente opcionais, documentadas no README de cada projeto: `SECRET_KEY`, `HOST`, `PORT`, `DEBUG`/`APP_DEBUG`, `LOG_LEVEL`, `ADMIN_TOKEN` (P1/P2), `ENABLE_ADMIN_ENDPOINTS` (P1), `PAYMENT_GATEWAY_KEY` (P2), `AUTH_REQUIRED`, `CORS_ORIGINS`, `SMTP_*` (P3).
 
