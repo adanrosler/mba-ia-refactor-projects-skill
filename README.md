@@ -498,6 +498,7 @@ Cada bloco é independente e começa na raiz do repositório. O servidor sobe em
 ```bash
 REPO=$(git rev-parse --show-toplevel)   # raiz do repositório
 wait_for() { until curl -s -o /dev/null "$1"; do sleep 1; done; }
+wait_log() { until grep -q "$2" "$1" 2>/dev/null; do sleep 1; done; }   # espera a linha de boot do app
 
 # Projeto 1 — code-smells-project (porta 5000): com token e depois sem a credencial (fail-closed)
 cd "$REPO/code-smells-project"
@@ -515,11 +516,11 @@ kill $PID
 cd "$REPO/ecommerce-api-legacy"
 export ADMIN_TOKEN=$(openssl rand -hex 16)
 node src/app.js > /tmp/p2.log 2>&1 & PID=$!     # o mesmo que "npm start"
-wait_for http://127.0.0.1:3000/                 # a rota "/" responde 404, mas já indica que o servidor subiu
+wait_log /tmp/p2.log "rodando em"               # espera o log de boot (outro processo na 3000 responderia ao curl)
 bash "$REPO/scripts/smoke-projeto-2.sh" http://127.0.0.1:3000
 kill $PID; unset ADMIN_TOKEN
 node src/app.js > /tmp/p2b.log 2>&1 & PID=$!
-wait_for http://127.0.0.1:3000/
+wait_log /tmp/p2b.log "rodando em"
 bash "$REPO/scripts/smoke-projeto-2.sh" http://127.0.0.1:3000
 kill $PID
 
