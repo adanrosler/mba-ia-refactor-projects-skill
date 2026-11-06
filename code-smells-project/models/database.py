@@ -1,3 +1,4 @@
+"""Conexão SQLite por requisição (flask.g) e criação do schema."""
 import sqlite3
 
 from flask import current_app, g
@@ -46,42 +47,30 @@ SCHEMA = (
 )
 
 
-def connect(path):
-    conn = sqlite3.connect(path)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
 def get_db():
-    """Uma conexão por requisição/app context (sem estado global compartilhado entre threads)."""
     if "db" not in g:
-        g.db = connect(current_app.config["DATABASE_PATH"])
+        g.db = sqlite3.connect(current_app.config["DATABASE_PATH"])
+        g.db.row_factory = sqlite3.Row
     return g.db
 
 
 def close_db(_exc=None):
-    conn = g.pop("db", None)
-    if conn is not None:
-        conn.close()
+    db = g.pop("db", None)
+    if db is not None:
+        db.close()
 
 
-def init_schema(conn):
-    with conn:
+def init_schema(db):
+    with db:
         for statement in SCHEMA:
-            conn.execute(statement)
+            db.execute(statement)
 
 
-def paginate(limit, offset):
-    """Cláusula LIMIT/OFFSET opcional; sem limite devolve tudo (comportamento original)."""
-    if limit is None:
-        return "", []
-    return " LIMIT ? OFFSET ?", [limit, offset]
-
-
-def init_app(app, on_init=()):
+def init_app(app, seed=None):
+    """Registra o teardown e prepara o banco (schema + seed opcional) no boot."""
     app.teardown_appcontext(close_db)
     with app.app_context():
-        conn = get_db()
-        init_schema(conn)
-        for step in on_init:
-            step(conn)
+        db = get_db()
+        init_schema(db)
+        if seed is not None:
+            seed(db)

@@ -1,24 +1,26 @@
 from errors import ValidationError
 from models.pedido_model import STATUS_VALIDOS
-from validators.common import is_int
+from validators.common import exigir_objeto, is_inteiro
 
 
 def validar_pedido(dados):
-    if not dados or not isinstance(dados, dict):
-        raise ValidationError("Dados inválidos")
+    exigir_objeto(dados)
     usuario_id = dados.get("usuario_id")
     itens = dados.get("itens", [])
     if not usuario_id:
         raise ValidationError("Usuario ID é obrigatório")
-    if not itens:
+    if not is_inteiro(usuario_id):
+        raise ValidationError("Usuario ID inválido")
+    if not itens or not isinstance(itens, list):
         raise ValidationError("Pedido deve ter pelo menos 1 item")
-    if not isinstance(itens, list):
-        raise ValidationError("Itens inválidos")
     for item in itens:
-        if not isinstance(item, dict) or not is_int(item.get("produto_id")) or not is_int(item.get("quantidade")):
-            raise ValidationError("Item inválido: produto_id e quantidade (inteiros) são obrigatórios")
-        if item["quantidade"] <= 0:
-            raise ValidationError("Quantidade deve ser maior que zero")
+        if (
+            not isinstance(item, dict)
+            or not is_inteiro(item.get("produto_id"))
+            or not is_inteiro(item.get("quantidade"))
+            or item["quantidade"] <= 0
+        ):
+            raise ValidationError("Item de pedido inválido")
     return usuario_id, itens
 
 

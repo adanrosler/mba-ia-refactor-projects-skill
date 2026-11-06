@@ -1,12 +1,14 @@
 from errors import ValidationError
-from models.produto_model import CATEGORIA_PADRAO, CATEGORIAS_VALIDAS, NOME_MAX_LEN, NOME_MIN_LEN
-from validators.common import is_int, is_number
+from models.produto_model import CATEGORIA_PADRAO, CATEGORIAS_VALIDAS
+from validators.common import exigir_objeto, is_inteiro, is_numero
+
+NOME_MIN = 2
+NOME_MAX = 200
 
 
 def validar_produto(dados):
-    """Mesmas regras (e mensagens) para criação e atualização de produto."""
-    if not dados or not isinstance(dados, dict):
-        raise ValidationError("Dados inválidos")
+    """Regras únicas para criação e atualização. Retorna os campos normalizados."""
+    exigir_objeto(dados)
     if "nome" not in dados:
         raise ValidationError("Nome é obrigatório")
     if "preco" not in dados:
@@ -24,30 +26,19 @@ def validar_produto(dados):
         raise ValidationError("Nome inválido")
     if not isinstance(descricao, str):
         raise ValidationError("Descrição inválida")
-    if not is_number(preco):
+    if not is_numero(preco):
         raise ValidationError("Preço inválido")
-    if not is_int(estoque):
+    if not is_inteiro(estoque):
         raise ValidationError("Estoque inválido")
-
     if preco < 0:
         raise ValidationError("Preço não pode ser negativo")
     if estoque < 0:
         raise ValidationError("Estoque não pode ser negativo")
-    if len(nome) < NOME_MIN_LEN:
+    if len(nome) < NOME_MIN:
         raise ValidationError("Nome muito curto")
-    if len(nome) > NOME_MAX_LEN:
+    if len(nome) > NOME_MAX:
         raise ValidationError("Nome muito longo")
     if categoria not in CATEGORIAS_VALIDAS:
-        raise ValidationError("Categoria inválida. Válidas: " + str(CATEGORIAS_VALIDAS))
+        raise ValidationError("Categoria inválida. Válidas: " + str(list(CATEGORIAS_VALIDAS)))
 
-    return {"nome": nome, "descricao": descricao, "preco": preco,
-            "estoque": estoque, "categoria": categoria}
-
-
-def validar_filtro_preco(valor):
-    if not valor:
-        return None
-    try:
-        return float(valor)
-    except ValueError:
-        raise ValidationError("Filtro de preço inválido")
+    return {"nome": nome, "descricao": descricao, "preco": preco, "estoque": estoque, "categoria": categoria}

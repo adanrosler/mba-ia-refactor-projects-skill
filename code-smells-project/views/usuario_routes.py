@@ -1,29 +1,29 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 
-from middlewares.auth import admin_token_required
-from views.pagination import pagination_args
+from middlewares.auth import require_admin
+from views.request_utils import json_body, paginacao
 
 
-def build_usuario_routes(controller):
+def build_usuario_blueprint(controller):
     bp = Blueprint("usuarios", __name__)
 
     @bp.get("/usuarios")
-    @admin_token_required
+    @require_admin
     def listar_usuarios():
-        return jsonify({"dados": controller.listar(*pagination_args()), "sucesso": True}), 200
+        return jsonify({"dados": controller.listar(*paginacao()), "sucesso": True}), 200
 
-    @bp.get("/usuarios/<int:usuario_id>")
-    def buscar_usuario(usuario_id):
-        return jsonify({"dados": controller.obter(usuario_id), "sucesso": True}), 200
+    @bp.get("/usuarios/<int:id>")
+    @require_admin
+    def buscar_usuario(id):
+        return jsonify({"dados": controller.obter(id), "sucesso": True}), 200
 
     @bp.post("/usuarios")
     def criar_usuario():
-        usuario_id = controller.criar(request.get_json(silent=True))
-        return jsonify({"dados": {"id": usuario_id}, "sucesso": True}), 201
+        return jsonify({"dados": controller.criar(json_body()), "sucesso": True}), 201
 
     @bp.post("/login")
     def login():
-        usuario = controller.login(request.get_json(silent=True))
+        usuario = controller.login(json_body())
         return jsonify({"dados": usuario, "sucesso": True, "mensagem": "Login OK"}), 200
 
     return bp

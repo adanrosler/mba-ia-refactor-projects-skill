@@ -1,78 +1,76 @@
-from models.database import paginate
+"""Acesso a dados de produtos."""
+from models.database import get_db
 
-CATEGORIAS_VALIDAS = ["informatica", "moveis", "vestuario", "geral", "eletronicos", "livros"]
+CATEGORIAS_VALIDAS = ("informatica", "moveis", "vestuario", "geral", "eletronicos", "livros")
 CATEGORIA_PADRAO = "geral"
-NOME_MIN_LEN = 2
-NOME_MAX_LEN = 200
-
-_COLUNAS = ("id", "nome", "descricao", "preco", "estoque", "categoria", "ativo", "criado_em")
 
 
 def to_dict(row):
-    return {coluna: row[coluna] for coluna in _COLUNAS}
+    return {
+        "id": row["id"],
+        "nome": row["nome"],
+        "descricao": row["descricao"],
+        "preco": row["preco"],
+        "estoque": row["estoque"],
+        "categoria": row["categoria"],
+        "ativo": row["ativo"],
+        "criado_em": row["criado_em"],
+    }
 
 
-class ProdutoModel:
-    def __init__(self, get_connection):
-        self._db = get_connection
+def listar(limit=None, offset=0):
+    sql, params = "SELECT * FROM produtos ORDER BY id", []
+    if limit is not None:
+        sql += " LIMIT ? OFFSET ?"
+        params += [limit, offset]
+    return [to_dict(row) for row in get_db().execute(sql, params).fetchall()]
 
-    def listar(self, limit=None, offset=0):
-        clause, params = paginate(limit, offset)
-        rows = self._db().execute("SELECT * FROM produtos ORDER BY id" + clause, params).fetchall()
-        return [to_dict(row) for row in rows]
 
-    def buscar_por_id(self, produto_id):
-        row = self._db().execute("SELECT * FROM produtos WHERE id = ?", (produto_id,)).fetchone()
-        return to_dict(row) if row else None
+def buscar_por_id(produto_id):
+    row = get_db().execute("SELECT * FROM produtos WHERE id = ?", (produto_id,)).fetchone()
+    return to_dict(row) if row else None
 
-    def buscar_por_ids(self, produto_ids):
-        ids = list(set(produto_ids))
-        placeholders = ", ".join("?" for _ in ids)
-        rows = self._db().execute(
-            f"SELECT * FROM produtos WHERE id IN ({placeholders})", ids
-        ).fetchall()
-        return {row["id"]: to_dict(row) for row in rows}
 
-    def criar(self, nome, descricao, preco, estoque, categoria):
-        conn = self._db()
-        with conn:
-            cursor = conn.execute(
-                "INSERT INTO produtos (nome, descricao, preco, estoque, categoria) VALUES (?, ?, ?, ?, ?)",
-                (nome, descricao, preco, estoque, categoria),
-            )
-        return cursor.lastrowid
+def buscar(termo, categoria=None, preco_min=None, preco_max=None):
+    sql, params = "SELECT * FROM produtos WHERE 1=1", []
+    if termo:
+        sql += " AND (nome LIKE ? OR descricao LIKE ?)"
+        params += [f"%{termo}%", f"%{termo}%"]
+    if categoria:
+        sql += " AND categoria = ?"
+        params.append(categoria)
+    if preco_min:
+        sql += " AND preco >= ?"
+        params.append(preco_min)
+    if preco_max:
+        sql += " AND preco <= ?"
+        params.append(preco_max)
+    sql += " ORDER BY id"
+    return [to_dict(row) for row in get_db().execute(sql, params).fetchall()]
 
-    def atualizar(self, produto_id, nome, descricao, preco, estoque, categoria):
-        conn = self._db()
-        with conn:
-            conn.execute(
-                "UPDATE produtos SET nome = ?, descricao = ?, preco = ?, estoque = ?, categoria = ? WHERE id = ?",
-                (nome, descricao, preco, estoque, categoria, produto_id),
-            )
 
-    def deletar(self, produto_id):
-        # Itens de pedidos antigos mantêm o produto_id; a listagem de pedidos usa LEFT JOIN
-        # e exibe "Desconhecido" (histórico de pedidos preservado).
-        conn = self._db()
-        with conn:
-            conn.execute("DELETE FROM produtos WHERE id = ?", (produto_id,))
+def criar(nome, descricao, preco, estoque, categoria):
+    db = get_db()
+    with db:
+        cursor = db.execute(
+            "INSERT INTO produtos (nome, descricao, preco, estoque, categoria) VALUES (?, ?, ?, ?, ?)",
+            (nome, descricao, preco, estoque, categoria),
+        )
+    return cursor.lastrowid
 
-    def buscar(self, termo, categoria=None, preco_min=None, preco_max=None):
-        query, params = "SELECT * FROM produtos WHERE 1=1", []
-        if termo:
-            query += " AND (nome LIKE ? OR descricao LIKE ?)"
-            params += [f"%{termo}%", f"%{termo}%"]
-        if categoria:
-            query += " AND categoria = ?"
-            params.append(categoria)
-        if preco_min:
-            query += " AND preco >= ?"
-            params.append(preco_min)
-        if preco_max:
-            query += " AND preco <= ?"
-            params.append(preco_max)
-        rows = self._db().execute(query + " ORDER BY id", params).fetchall()
-        return [to_dict(row) for row in rows]
 
-    def contar(self):
-        return self._db().execute("SELECT COUNT(*) FROM produtos").fetchone()[0]
+def atualizar(produto_id, nome, descricao, preco, estoque, categoria):
+    db = get_db()
+    with db:
+        db.execute(
+            "UPDATE produtos SET nome = ?, descricao = ?, preco = ?, estoque = ?, categoria = ? WHERE id = ?",
+            (nome, descricao, preco, estoque, categoria, produto_id),
+        )
+
+
+def deletar(produto_id):
+    """Remove o produto. Os itens de pedidos já feitos são histórico e são preservados
+    (guardam preco_unitario); a leitura dos pedidos mostra o nome como "Desconhecido"."""
+    db = get_db()
+    with db:
+        db.execute("DELETE FROM produtos WHERE id = ?", (produto_id,))

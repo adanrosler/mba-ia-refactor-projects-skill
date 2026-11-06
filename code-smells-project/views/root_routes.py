@@ -1,14 +1,14 @@
-from flask import Blueprint, current_app, jsonify
+from flask import Blueprint, jsonify
 
 
-def build_root_routes():
+def build_root_blueprint(versao):
     bp = Blueprint("root", __name__)
 
     @bp.get("/")
     def index():
         return jsonify({
             "mensagem": "Bem-vindo à API da Loja",
-            "versao": current_app.config["APP_VERSION"],
+            "versao": versao,
             "endpoints": {
                 "produtos": "/produtos",
                 "usuarios": "/usuarios",

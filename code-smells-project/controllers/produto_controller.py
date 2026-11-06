@@ -1,7 +1,9 @@
 import logging
 
+from controllers.pagination import limites
 from errors import NotFoundError
-from validators.produto_validator import validar_filtro_preco, validar_produto
+from validators.common import parse_float_opcional
+from validators.produto_validator import validar_produto
 
 logger = logging.getLogger(__name__)
 
@@ -10,9 +12,10 @@ class ProdutoController:
     def __init__(self, produtos):
         self.produtos = produtos
 
-    def listar(self, limit=None, offset=0):
+    def listar(self, page=None, per_page=None):
+        limit, offset = limites(page, per_page)
         produtos = self.produtos.listar(limit, offset)
-        logger.info("Listando %d produtos", len(produtos))
+        logger.info("Listando %s produtos", len(produtos))
         return produtos
 
     def obter(self, produto_id):
@@ -26,22 +29,22 @@ class ProdutoController:
             raise NotFoundError("Produto não encontrado")
 
     def criar(self, dados):
-        produto = validar_produto(dados)
-        produto_id = self.produtos.criar(**produto)
-        logger.info("Produto criado com ID: %s", produto_id)
-        return produto_id
+        campos = validar_produto(dados)
+        produto_id = self.produtos.criar(**campos)
+        logger.info("Produto criado: id=%s", produto_id)
+        return {"id": produto_id}
 
     def atualizar(self, produto_id, dados):
         self._garantir_existe(produto_id)
-        produto = validar_produto(dados)
-        self.produtos.atualizar(produto_id, **produto)
+        campos = validar_produto(dados)
+        self.produtos.atualizar(produto_id, **campos)
 
     def deletar(self, produto_id):
         self._garantir_existe(produto_id)
         self.produtos.deletar(produto_id)
-        logger.info("Produto %s deletado", produto_id)
+        logger.info("Produto deletado: id=%s", produto_id)
 
     def buscar(self, termo, categoria, preco_min, preco_max):
-        return self.produtos.buscar(
-            termo, categoria, validar_filtro_preco(preco_min), validar_filtro_preco(preco_max)
-        )
+        preco_min = parse_float_opcional(preco_min, "Parâmetro preco_min inválido")
+        preco_max = parse_float_opcional(preco_max, "Parâmetro preco_max inválido")
+        return self.produtos.buscar(termo, categoria, preco_min, preco_max)

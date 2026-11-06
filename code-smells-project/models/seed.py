@@ -1,6 +1,7 @@
-from models.usuario_model import hash_senha
+"""Dados de exemplo inseridos no boot quando o banco está vazio."""
+from werkzeug.security import generate_password_hash
 
-PRODUTOS = [
+PRODUTOS_EXEMPLO = (
     ("Notebook Gamer", "Notebook potente para jogos", 5999.99, 10, "informatica"),
     ("Mouse Wireless", "Mouse sem fio ergonômico", 89.90, 50, "informatica"),
     ("Teclado Mecânico", "Teclado mecânico RGB", 299.90, 30, "informatica"),
@@ -11,24 +12,25 @@ PRODUTOS = [
     ("Hub USB", "Hub USB 3.0 7 portas", 79.90, 40, "informatica"),
     ("SSD 1TB", "SSD NVMe 1TB", 449.90, 35, "informatica"),
     ("Camiseta Dev", "Camiseta estampa código", 59.90, 100, "vestuario"),
-]
+)
 
-USUARIOS = [
+USUARIOS_EXEMPLO = (
     ("Admin", "admin@loja.com", "admin123", "admin"),
     ("João Silva", "joao@email.com", "123456", "cliente"),
     ("Maria Santos", "maria@email.com", "senha123", "cliente"),
-]
+)
 
 
-def seed_if_empty(conn):
-    if conn.execute("SELECT COUNT(*) FROM produtos").fetchone()[0] > 0:
+def seed_if_empty(db):
+    (total_produtos,) = db.execute("SELECT COUNT(*) FROM produtos").fetchone()
+    if total_produtos:
         return
-    with conn:
-        conn.executemany(
+    with db:
+        db.executemany(
             "INSERT INTO produtos (nome, descricao, preco, estoque, categoria) VALUES (?, ?, ?, ?, ?)",
-            PRODUTOS,
+            PRODUTOS_EXEMPLO,
         )
-        conn.executemany(
+        db.executemany(
             "INSERT INTO usuarios (nome, email, senha, tipo) VALUES (?, ?, ?, ?)",
-            [(nome, email, hash_senha(senha), tipo) for nome, email, senha, tipo in USUARIOS],
+            [(nome, email, generate_password_hash(senha), tipo) for nome, email, senha, tipo in USUARIOS_EXEMPLO],
         )

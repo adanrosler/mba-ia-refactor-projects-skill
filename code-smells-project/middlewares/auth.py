@@ -1,39 +1,34 @@
+"""Autenticação administrativa por credencial estática (fail-closed)."""
 import hmac
 from functools import wraps
 
 from flask import current_app, request
 
-from errors import ForbiddenError, UnauthorizedError
+from errors import UnauthorizedError
+
+BEARER_PREFIX = "Bearer "
 
 
-def _check_admin_token():
-    token = current_app.config.get("ADMIN_TOKEN")
-    if not token:
-        return  # modo compatível: sem ADMIN_TOKEN configurado, a rota continua aberta
-    sent = request.headers.get("Authorization", "").removeprefix("Bearer ")
-    if not hmac.compare_digest(sent, token):
-        raise UnauthorizedError("Não autorizado")
+def _bearer_token():
+    header = request.headers.get("Authorization", "")
+    if not header.startswith(BEARER_PREFIX):
+        return ""
+    return header[len(BEARER_PREFIX):].strip()
 
 
-def admin_token_required(view):
-    """Exige `Authorization: Bearer <ADMIN_TOKEN>` quando ADMIN_TOKEN estiver definido."""
+def require_admin(view):
+    """Exige `Authorization: Bearer <ADMIN_TOKEN>`.
 
-    @wraps(view)
-    def wrapper(*args, **kwargs):
-        _check_admin_token()
-        return view(*args, **kwargs)
-
-    return wrapper
-
-
-def admin_tools_required(view):
-    """Rotas destrutivas: desligadas por padrão (ENABLE_ADMIN_ENDPOINTS) e protegidas por token."""
+    Nega com 401 quando o header falta, não confere ou quando ADMIN_TOKEN não está
+    configurado no ambiente — nunca libera acesso anônimo.
+    """
 
     @wraps(view)
     def wrapper(*args, **kwargs):
-        if not current_app.config.get("ENABLE_ADMIN_ENDPOINTS"):
-            raise ForbiddenError("Endpoint administrativo desabilitado")
-        _check_admin_token()
+        expected = current_app.config.get("ADMIN_TOKEN")
+        sent = _bearer_token()
+        if not expected or not sent or not hmac.compare_digest(sent.encode(), expected.encode()):
+            raise UnauthorizedError("Não autorizado")
         return view(*args, **kwargs)
 
     return wrapper

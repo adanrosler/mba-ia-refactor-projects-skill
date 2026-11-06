@@ -1,66 +1,68 @@
+"""Acesso a dados de usuários e verificação de senha."""
+import hmac
+
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from models.database import paginate
+from models.database import get_db
 
 TIPO_PADRAO = "cliente"
-_HASH_PREFIXES = ("pbkdf2:", "scrypt:")
-
-_COLUNAS_PUBLICAS = ("id", "nome", "email", "tipo", "criado_em")
+_HASH_PREFIXES = ("scrypt:", "pbkdf2:")
 
 
-def hash_senha(senha):
-    return generate_password_hash(senha)
+def to_dict(row):
+    """Serialização pública: nunca inclui a senha."""
+    return {
+        "id": row["id"],
+        "nome": row["nome"],
+        "email": row["email"],
+        "tipo": row["tipo"],
+        "criado_em": row["criado_em"],
+    }
 
 
-def senha_tem_hash(valor):
-    return bool(valor) and valor.startswith(_HASH_PREFIXES)
+def to_login_dict(row):
+    return {"id": row["id"], "nome": row["nome"], "email": row["email"], "tipo": row["tipo"]}
 
 
-def to_dict(row, campos=_COLUNAS_PUBLICAS):
-    return {campo: row[campo] for campo in campos}
+def listar(limit=None, offset=0):
+    sql, params = "SELECT * FROM usuarios ORDER BY id", []
+    if limit is not None:
+        sql += " LIMIT ? OFFSET ?"
+        params += [limit, offset]
+    return [to_dict(row) for row in get_db().execute(sql, params).fetchall()]
 
 
-def migrar_senhas_texto_puro(conn):
-    """Converte senhas legadas em texto puro para hash (executado no boot)."""
-    rows = conn.execute("SELECT id, senha FROM usuarios").fetchall()
-    legadas = [(hash_senha(row["senha"]), row["id"]) for row in rows
-               if row["senha"] and not senha_tem_hash(row["senha"])]
-    if legadas:
-        with conn:
-            conn.executemany("UPDATE usuarios SET senha = ? WHERE id = ?", legadas)
-    return len(legadas)
+def buscar_por_id(usuario_id):
+    row = get_db().execute("SELECT * FROM usuarios WHERE id = ?", (usuario_id,)).fetchone()
+    return to_dict(row) if row else None
 
 
-class UsuarioModel:
-    def __init__(self, get_connection):
-        self._db = get_connection
+def criar(nome, email, senha, tipo=TIPO_PADRAO):
+    db = get_db()
+    with db:
+        cursor = db.execute(
+            "INSERT INTO usuarios (nome, email, senha, tipo) VALUES (?, ?, ?, ?)",
+            (nome, email, generate_password_hash(senha), tipo),
+        )
+    return cursor.lastrowid
 
-    def listar(self, limit=None, offset=0):
-        clause, params = paginate(limit, offset)
-        rows = self._db().execute("SELECT * FROM usuarios ORDER BY id" + clause, params).fetchall()
-        return [to_dict(row) for row in rows]
 
-    def buscar_por_id(self, usuario_id):
-        row = self._db().execute("SELECT * FROM usuarios WHERE id = ?", (usuario_id,)).fetchone()
-        return to_dict(row) if row else None
+def _senha_confere(db, row, senha):
+    armazenada = row["senha"] or ""
+    if armazenada.startswith(_HASH_PREFIXES):
+        return check_password_hash(armazenada, senha)
+    # Senha legada em texto puro: verifica e migra para hash no primeiro login válido.
+    if hmac.compare_digest(armazenada.encode(), senha.encode()):
+        with db:
+            db.execute("UPDATE usuarios SET senha = ? WHERE id = ?", (generate_password_hash(senha), row["id"]))
+        return True
+    return False
 
-    def autenticar(self, email, senha):
-        rows = self._db().execute(
-            "SELECT * FROM usuarios WHERE email = ? ORDER BY id", (email,)
-        ).fetchall()
-        for row in rows:
-            if senha_tem_hash(row["senha"]) and check_password_hash(row["senha"], senha):
-                return to_dict(row, ("id", "nome", "email", "tipo"))
-        return None
 
-    def criar(self, nome, email, senha, tipo=TIPO_PADRAO):
-        conn = self._db()
-        with conn:
-            cursor = conn.execute(
-                "INSERT INTO usuarios (nome, email, senha, tipo) VALUES (?, ?, ?, ?)",
-                (nome, email, hash_senha(senha), tipo),
-            )
-        return cursor.lastrowid
-
-    def contar(self):
-        return self._db().execute("SELECT COUNT(*) FROM usuarios").fetchone()[0]
+def autenticar(email, senha):
+    db = get_db()
+    rows = db.execute("SELECT * FROM usuarios WHERE email = ? ORDER BY id", (email,)).fetchall()
+    for row in rows:
+        if _senha_confere(db, row, senha):
+            return to_login_dict(row)
+    return None
