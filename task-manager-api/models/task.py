@@ -2,32 +2,16 @@ from sqlalchemy import case, func
 from sqlalchemy.orm import joinedload
 
 from database import db
-from models.base import CrudMixin, paginate
+from models.base import commit, paginate
+from utils.constants import CLOSED_STATUSES, DEFAULT_PRIORITY, STATUS_DONE, STATUS_PENDING
 from utils.time import utcnow
 
-STATUS_PENDING = 'pending'
-STATUS_IN_PROGRESS = 'in_progress'
-STATUS_DONE = 'done'
-STATUS_CANCELLED = 'cancelled'
-VALID_STATUSES = (STATUS_PENDING, STATUS_IN_PROGRESS, STATUS_DONE, STATUS_CANCELLED)
-CLOSED_STATUSES = (STATUS_DONE, STATUS_CANCELLED)
 
-MIN_PRIORITY = 1
-MAX_PRIORITY = 5
-DEFAULT_PRIORITY = 3
-HIGH_PRIORITY_MAX = 2
-PRIORITY_LABELS = {1: 'critical', 2: 'high', 3: 'medium', 4: 'low', 5: 'minimal'}
-
-MIN_TITLE_LENGTH = 3
-MAX_TITLE_LENGTH = 200
-TAG_SEPARATOR = ','
-
-
-class Task(CrudMixin, db.Model):
+class Task(db.Model):
     __tablename__ = 'tasks'
 
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(MAX_TITLE_LENGTH), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(50), default=STATUS_PENDING)
     priority = db.Column(db.Integer, default=DEFAULT_PRIORITY)
@@ -41,13 +25,18 @@ class Task(CrudMixin, db.Model):
     user = db.relationship('User', backref='tasks')
     category = db.relationship('Category', backref='tasks')
 
+    # ---- regras da entidade -------------------------------------------------
     def is_overdue(self, now=None):
         now = now or utcnow()
         return bool(self.due_date and self.due_date < now and self.status not in CLOSED_STATUSES)
 
-    def set_tags(self, tags):
-        self.tags = TAG_SEPARATOR.join(tags) if isinstance(tags, list) else tags
+    def days_overdue(self, now=None):
+        return ((now or utcnow()) - self.due_date).days
 
+    def set_tags(self, tags):
+        self.tags = ','.join(tags) if isinstance(tags, list) else tags
+
+    # ---- serialização -------------------------------------------------------
     def to_dict(self, with_overdue=False, with_names=False):
         data = {
             'id': self.id,
@@ -60,7 +49,7 @@ class Task(CrudMixin, db.Model):
             'created_at': str(self.created_at),
             'updated_at': str(self.updated_at),
             'due_date': str(self.due_date) if self.due_date else None,
-            'tags': self.tags.split(TAG_SEPARATOR) if self.tags else [],
+            'tags': self.tags.split(',') if self.tags else [],
         }
         if with_overdue:
             data['overdue'] = self.is_overdue()
@@ -69,7 +58,8 @@ class Task(CrudMixin, db.Model):
             data['category_name'] = self.category.name if self.category else None
         return data
 
-    def to_brief_dict(self):
+    def to_summary_dict(self):
+        """Formato reduzido usado em /users/<id>/tasks."""
         return {
             'id': self.id,
             'title': self.title,
@@ -81,17 +71,26 @@ class Task(CrudMixin, db.Model):
             'overdue': self.is_overdue(),
         }
 
-    # ---- consultas -------------------------------------------------------
+    # ---- consultas ----------------------------------------------------------
+    @classmethod
+    def find(cls, task_id):
+        return db.session.get(cls, task_id)
 
     @classmethod
-    def list_all(cls, page=None, per_page=None, with_relations=False):
-        query = cls.query.order_by(cls.id)
-        if with_relations:
-            query = query.options(joinedload(cls.user), joinedload(cls.category))
-        return paginate(query, page, per_page).all()
+    def list_with_relations(cls, page=None, per_page=None):
+        query = cls.query.options(joinedload(cls.user), joinedload(cls.category)).order_by(cls.id)
+        return paginate(query, page, per_page)
 
     @classmethod
-    def search(cls, text=None, status=None, priority=None, user_id=None, page=None, per_page=None):
+    def list_all(cls):
+        return cls.query.order_by(cls.id).all()
+
+    @classmethod
+    def list_by_user(cls, user_id):
+        return cls.query.filter_by(user_id=user_id).order_by(cls.id).all()
+
+    @classmethod
+    def search(cls, text=None, status=None, priority=None, user_id=None):
         query = cls.query
         if text:
             pattern = f'%{text}%'
@@ -102,50 +101,53 @@ class Task(CrudMixin, db.Model):
             query = query.filter(cls.priority == priority)
         if user_id is not None:
             query = query.filter(cls.user_id == user_id)
-        return paginate(query.order_by(cls.id), page, per_page).all()
+        return query.order_by(cls.id).all()
 
     @classmethod
-    def list_by_user(cls, user_id):
-        return cls.query.filter_by(user_id=user_id).order_by(cls.id).all()
-
-    @classmethod
-    def _overdue_filter(cls, now):
-        return (cls.due_date.isnot(None), cls.due_date < now, cls.status.notin_(CLOSED_STATUSES))
-
-    @classmethod
-    def list_overdue(cls, now):
-        return cls.query.filter(*cls._overdue_filter(now)).order_by(cls.id).all()
-
-    @classmethod
-    def count_overdue(cls, now):
-        return cls.query.filter(*cls._overdue_filter(now)).count()
-
-    @classmethod
-    def count_by(cls, column):
-        rows = db.session.query(column, func.count(cls.id)).group_by(column).all()
-        return {key: total for key, total in rows}
+    def count(cls):
+        return cls.query.count()
 
     @classmethod
     def count_by_status(cls):
-        counts = cls.count_by(cls.status)
-        return {status: counts.get(status, 0) for status in VALID_STATUSES}
+        return dict(db.session.query(cls.status, func.count(cls.id)).group_by(cls.status).all())
 
     @classmethod
     def count_by_priority(cls):
-        counts = cls.count_by(cls.priority)
-        return {priority: counts.get(priority, 0) for priority in PRIORITY_LABELS}
+        return dict(db.session.query(cls.priority, func.count(cls.id)).group_by(cls.priority).all())
+
+    @classmethod
+    def _overdue_filter(cls, query, now):
+        return query.filter(cls.due_date.isnot(None), cls.due_date < now,
+                            cls.status.notin_(CLOSED_STATUSES))
+
+    @classmethod
+    def list_overdue(cls, now=None):
+        return cls._overdue_filter(cls.query, now or utcnow()).order_by(cls.id).all()
+
+    @classmethod
+    def count_overdue(cls, now=None):
+        return cls._overdue_filter(cls.query, now or utcnow()).count()
 
     @classmethod
     def count_created_since(cls, since):
         return cls.query.filter(cls.created_at >= since).count()
 
     @classmethod
-    def count_completed_since(cls, since):
+    def count_done_since(cls, since):
         return cls.query.filter(cls.status == STATUS_DONE, cls.updated_at >= since).count()
 
     @classmethod
-    def completion_by_user(cls):
-        """{user_id: (total, concluídas)} em uma única consulta agregada."""
+    def totals_by_user(cls):
+        """{user_id: (total, concluídas)} numa única query agregada."""
         done = func.sum(case((cls.status == STATUS_DONE, 1), else_=0))
         rows = db.session.query(cls.user_id, func.count(cls.id), done).group_by(cls.user_id).all()
-        return {user_id: (total, completed or 0) for user_id, total, completed in rows}
+        return {user_id: (total, int(completed or 0)) for user_id, total, completed in rows}
+
+    # ---- persistência -------------------------------------------------------
+    def save(self, error_message):
+        db.session.add(self)
+        commit(error_message)
+
+    def delete(self, error_message):
+        db.session.delete(self)
+        commit(error_message)

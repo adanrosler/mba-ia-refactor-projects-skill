@@ -1,32 +1,33 @@
 from models.category import Category
-from models.task import Task
 from utils.errors import NotFoundError
 from validators.category_validator import validate_category_create, validate_category_update
 
 
 class CategoryController:
-    def _get_or_404(self, category_id):
-        category = Category.get(category_id)
-        if not category:
+    @staticmethod
+    def _get_or_404(category_id):
+        category = Category.find(category_id)
+        if category is None:
             raise NotFoundError('Categoria não encontrada')
         return category
 
     def list_categories(self, page=None, per_page=None):
-        task_counts = Task.count_by(Task.category_id)
-        return [
-            {**category.to_dict(), 'task_count': task_counts.get(category.id, 0)}
-            for category in Category.list_all(page, per_page)
-        ]
+        task_counts = Category.task_counts()
+        result = []
+        for category in Category.list(page, per_page):
+            data = category.to_dict()
+            data['task_count'] = task_counts.get(category.id, 0)
+            result.append(data)
+        return result
 
-    def create_category(self, data):
-        fields = validate_category_create(data)
-        category = Category(**fields)
+    def create_category(self, payload):
+        category = Category(**validate_category_create(payload))
         category.save('Erro ao criar categoria')
         return category.to_dict()
 
-    def update_category(self, category_id, data):
+    def update_category(self, category_id, payload):
         category = self._get_or_404(category_id)
-        for field, value in validate_category_update(data).items():
+        for field, value in validate_category_update(payload).items():
             setattr(category, field, value)
         category.save('Erro ao atualizar')
         return category.to_dict()

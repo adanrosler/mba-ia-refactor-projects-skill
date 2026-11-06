@@ -1,4 +1,4 @@
-"""Erros de domínio convertidos em resposta JSON pelo middleware de erros."""
+"""Erros de domínio convertidos em JSON pelo middleware de erros."""
 
 
 class AppError(Exception):

@@ -1,103 +1,87 @@
 from datetime import datetime
 
-from models.task import (
-    DEFAULT_PRIORITY, MAX_PRIORITY, MAX_TITLE_LENGTH, MIN_PRIORITY, MIN_TITLE_LENGTH,
-    STATUS_PENDING, VALID_STATUSES,
-)
+from utils.constants import (DATE_FORMAT, DEFAULT_PRIORITY, PRIORITY_MAX, PRIORITY_MIN,
+                             STATUS_PENDING, TASK_STATUSES, TITLE_MAX_LENGTH, TITLE_MIN_LENGTH)
 from utils.errors import ValidationError
-from validators.common import optional_str, require_payload, to_int
-
-DATE_FORMAT = '%Y-%m-%d'
-CREATE_DATE_ERROR = 'Formato de data inválido. Use YYYY-MM-DD'
-UPDATE_DATE_ERROR = 'Formato de data inválido'
+from validators.common import is_int, require_json_object
 
 
-def _title(value):
-    if not isinstance(value, str):
+def _check_title(title):
+    if not isinstance(title, str):
         raise ValidationError('Título inválido')
-    if len(value) < MIN_TITLE_LENGTH:
+    if len(title) < TITLE_MIN_LENGTH:
         raise ValidationError('Título muito curto')
-    if len(value) > MAX_TITLE_LENGTH:
+    if len(title) > TITLE_MAX_LENGTH:
         raise ValidationError('Título muito longo')
-    return value
+    return title
 
 
-def _status(value):
-    if value not in VALID_STATUSES:
+def _check_status(status):
+    if status not in TASK_STATUSES:
         raise ValidationError('Status inválido')
-    return value
+    return status
 
 
-def _priority(value):
-    if isinstance(value, float):
+def _check_priority(priority):
+    if not is_int(priority):
         raise ValidationError('Prioridade inválida')
-    priority = to_int(value, 'Prioridade inválida')
-    if not MIN_PRIORITY <= priority <= MAX_PRIORITY:
-        raise ValidationError(f'Prioridade deve ser entre {MIN_PRIORITY} e {MAX_PRIORITY}')
+    if priority < PRIORITY_MIN or priority > PRIORITY_MAX:
+        raise ValidationError(f'Prioridade deve ser entre {PRIORITY_MIN} e {PRIORITY_MAX}')
     return priority
 
 
-def _tags(value):
-    if isinstance(value, list):
-        if not all(isinstance(tag, str) for tag in value):
-            raise ValidationError('Tags inválidas')
-        return value
-    if value is not None and not isinstance(value, str):
-        raise ValidationError('Tags inválidas')
+def _check_reference(value, field):
+    if value in (None, ''):
+        return None
+    if not is_int(value):
+        raise ValidationError(f'{field} inválido')
     return value
 
 
-def parse_due_date(value, message):
-    if not isinstance(value, str):
-        raise ValidationError(message)
+def _parse_due_date(value, error_message):
+    if not value:
+        return None
     try:
         return datetime.strptime(value, DATE_FORMAT)
-    except ValueError:
-        raise ValidationError(message)
+    except (TypeError, ValueError):
+        raise ValidationError(error_message)
 
 
 def validate_task_create(data):
-    """Valida os campos simples; existência de usuário/categoria e data ficam no controller."""
-    require_payload(data)
+    data = require_json_object(data)
     title = data.get('title')
     if not title:
         raise ValidationError('Título é obrigatório')
-    tags = data.get('tags')
     return {
-        'title': _title(title),
-        'description': optional_str(data.get('description', ''), 'Descrição inválida'),
-        'status': _status(data.get('status', STATUS_PENDING)),
-        'priority': _priority(data.get('priority', DEFAULT_PRIORITY)),
-        'user_id': data.get('user_id'),
-        'category_id': data.get('category_id'),
-        'due_date': data.get('due_date'),
-        'tags': _tags(tags) if tags else None,
+        'title': _check_title(title),
+        'description': data.get('description', ''),
+        'status': _check_status(data.get('status', STATUS_PENDING)),
+        'priority': _check_priority(data.get('priority', DEFAULT_PRIORITY)),
+        'user_id': _check_reference(data.get('user_id'), 'user_id'),
+        'category_id': _check_reference(data.get('category_id'), 'category_id'),
+        'due_date': _parse_due_date(data.get('due_date'), 'Formato de data inválido. Use YYYY-MM-DD'),
+        'tags': data.get('tags') or None,
     }
 
 
 def validate_task_update(data):
-    require_payload(data)
+    """Retorna apenas os campos presentes no corpo, já validados."""
+    data = require_json_object(data)
     changes = {}
     if 'title' in data:
-        changes['title'] = _title(data['title'])
+        changes['title'] = _check_title(data['title'])
     if 'description' in data:
-        changes['description'] = optional_str(data['description'], 'Descrição inválida')
+        changes['description'] = data['description']
     if 'status' in data:
-        changes['status'] = _status(data['status'])
+        changes['status'] = _check_status(data['status'])
     if 'priority' in data:
-        changes['priority'] = _priority(data['priority'])
-    for key in ('user_id', 'category_id', 'due_date'):
-        if key in data:
-            changes[key] = data[key]
+        changes['priority'] = _check_priority(data['priority'])
+    if 'user_id' in data:
+        changes['user_id'] = _check_reference(data['user_id'], 'user_id')
+    if 'category_id' in data:
+        changes['category_id'] = _check_reference(data['category_id'], 'category_id')
+    if 'due_date' in data:
+        changes['due_date'] = _parse_due_date(data['due_date'], 'Formato de data inválido')
     if 'tags' in data:
-        changes['tags'] = _tags(data['tags'])
+        changes['tags'] = data['tags']
     return changes
-
-
-def validate_search_filters(text, status, priority, user_id):
-    return {
-        'text': text or None,
-        'status': status or None,
-        'priority': to_int(priority, 'Prioridade inválida') if priority else None,
-        'user_id': to_int(user_id, 'Usuário inválido') if user_id else None,
-    }

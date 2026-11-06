@@ -1,20 +1,15 @@
-from datetime import datetime
-
-from flask import Blueprint
-
-API_NAME = 'Task Manager API'
-API_VERSION = '1.0'
+from flask import Blueprint, jsonify
 
 
-def build_system_routes():
-    bp = Blueprint('system', __name__)
+def create_system_blueprint(controller):
+    system_bp = Blueprint('system', __name__)
 
-    @bp.get('/health')
+    @system_bp.route('/health')
     def health():
-        return {'status': 'ok', 'timestamp': str(datetime.now())}
+        return jsonify(controller.health())
 
-    @bp.get('/')
+    @system_bp.route('/')
     def index():
-        return {'message': API_NAME, 'version': API_VERSION}
+        return jsonify(controller.index())
 
-    return bp
+    return system_bp

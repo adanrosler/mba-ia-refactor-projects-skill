@@ -1,42 +1,39 @@
-import re
-
-from models.category import DEFAULT_COLOR
+from utils.constants import COLOR_LENGTH, DEFAULT_COLOR
 from utils.errors import ValidationError
-from validators.common import optional_str, require_payload
-
-COLOR_PATTERN = re.compile(r'^#[0-9a-fA-F]{6}$')
+from validators.common import require_json_object
 
 
-def _color(value):
-    if value is not None and (not isinstance(value, str) or not COLOR_PATTERN.match(value)):
+def _check_color(color):
+    if not (isinstance(color, str) and len(color) == COLOR_LENGTH and color.startswith('#')):
         raise ValidationError('Cor inválida')
-    return value
-
-
-def _name(value):
-    if not value:
-        raise ValidationError('Nome é obrigatório')
-    if not isinstance(value, str):
-        raise ValidationError('Nome inválido')
-    return value
+    return color
 
 
 def validate_category_create(data):
-    require_payload(data)
+    data = require_json_object(data)
+    name = data.get('name')
+    if not name:
+        raise ValidationError('Nome é obrigatório')
+    if not isinstance(name, str):
+        raise ValidationError('Nome inválido')
     return {
-        'name': _name(data.get('name')),
-        'description': optional_str(data.get('description', ''), 'Descrição inválida'),
-        'color': _color(data.get('color', DEFAULT_COLOR)),
+        'name': name,
+        'description': data.get('description', ''),
+        'color': _check_color(data.get('color', DEFAULT_COLOR)),
     }
 
 
 def validate_category_update(data):
-    require_payload(data, allow_empty=True)
+    # O original aceitava corpo vazio ({}) como "sem alterações"; só o corpo ausente é inválido.
+    if not isinstance(data, dict):
+        raise ValidationError('Dados inválidos')
     changes = {}
     if 'name' in data:
-        changes['name'] = _name(data['name'])
+        if not isinstance(data['name'], str) or not data['name']:
+            raise ValidationError('Nome inválido')
+        changes['name'] = data['name']
     if 'description' in data:
-        changes['description'] = optional_str(data['description'], 'Descrição inválida')
+        changes['description'] = data['description']
     if 'color' in data:
-        changes['color'] = _color(data['color'])
+        changes['color'] = _check_color(data['color'])
     return changes

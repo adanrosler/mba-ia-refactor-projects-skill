@@ -1,21 +1,20 @@
 from flask import Blueprint, jsonify
 
-from models.user import ROLE_ADMIN, ROLE_MANAGER
+from middlewares.auth import require_auth
+from utils.constants import REPORT_ROLES
 
-REPORT_ROLES = (ROLE_ADMIN, ROLE_MANAGER)
 
+def create_report_blueprint(controller):
+    report_bp = Blueprint('reports', __name__)
 
-def build_report_routes(controller, auth):
-    bp = Blueprint('reports', __name__)
-
-    @bp.get('/reports/summary')
-    @auth.required(roles=REPORT_ROLES)
+    @report_bp.route('/reports/summary', methods=['GET'])
+    @require_auth(roles=REPORT_ROLES)
     def summary_report():
         return jsonify(controller.summary()), 200
 
-    @bp.get('/reports/user/<int:user_id>')
-    @auth.required(roles=REPORT_ROLES)
+    @report_bp.route('/reports/user/<int:user_id>', methods=['GET'])
+    @require_auth(roles=REPORT_ROLES)
     def user_report(user_id):
         return jsonify(controller.user_report(user_id)), 200
 
-    return bp
+    return report_bp

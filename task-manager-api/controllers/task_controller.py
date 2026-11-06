@@ -1,117 +1,100 @@
 import logging
 
 from models.category import Category
-from models.task import STATUS_DONE, Task
+from models.task import Task
 from models.user import User
+from utils.constants import STATUS_CANCELLED, STATUS_DONE, STATUS_IN_PROGRESS, STATUS_PENDING
 from utils.errors import NotFoundError
-from utils.numbers import percentage
+from utils.stats import completion_rate
 from utils.time import utcnow
-from validators.task_validator import (
-    CREATE_DATE_ERROR, UPDATE_DATE_ERROR, parse_due_date, validate_search_filters,
-    validate_task_create, validate_task_update,
-)
+from validators.task_validator import validate_task_create, validate_task_update
 
 logger = logging.getLogger(__name__)
-
-TASK_NOT_FOUND = 'Task não encontrada'
-
-
-def ensure_user_exists(user_id):
-    if user_id and not User.get(user_id):
-        raise NotFoundError('Usuário não encontrado')
-
-
-def ensure_category_exists(category_id):
-    if category_id and not Category.get(category_id):
-        raise NotFoundError('Categoria não encontrada')
 
 
 class TaskController:
     def __init__(self, notifier):
         self.notifier = notifier
 
-    def _get_or_404(self, task_id):
-        task = Task.get(task_id)
-        if not task:
-            raise NotFoundError(TASK_NOT_FOUND)
+    @staticmethod
+    def _get_or_404(task_id):
+        task = Task.find(task_id)
+        if task is None:
+            raise NotFoundError('Task não encontrada')
         return task
 
-    def _notify_assignment(self, task):
-        if task.user:
-            self.notifier.notify_task_assigned(task.user, task)
+    @staticmethod
+    def _ensure_references(user_id, category_id):
+        user = None
+        if user_id:
+            user = User.find(user_id)
+            if user is None:
+                raise NotFoundError('Usuário não encontrado')
+        if category_id and Category.find(category_id) is None:
+            raise NotFoundError('Categoria não encontrada')
+        return user
 
     def list_tasks(self, page=None, per_page=None):
-        tasks = Task.list_all(page, per_page, with_relations=True)
+        tasks = Task.list_with_relations(page, per_page)
         return [task.to_dict(with_overdue=True, with_names=True) for task in tasks]
 
     def get_task(self, task_id):
         return self._get_or_404(task_id).to_dict(with_overdue=True)
 
-    def create_task(self, data):
-        fields = validate_task_create(data)
-        ensure_user_exists(fields['user_id'])
-        ensure_category_exists(fields['category_id'])
+    def create_task(self, payload):
+        fields = validate_task_create(payload)
+        assignee = self._ensure_references(fields['user_id'], fields['category_id'])
 
-        task = Task(
-            title=fields['title'],
-            description=fields['description'],
-            status=fields['status'],
-            priority=fields['priority'],
-            user_id=fields['user_id'],
-            category_id=fields['category_id'],
-        )
-        if fields['due_date']:
-            task.due_date = parse_due_date(fields['due_date'], CREATE_DATE_ERROR)
+        task = Task(title=fields['title'], description=fields['description'], status=fields['status'],
+                    priority=fields['priority'], user_id=fields['user_id'],
+                    category_id=fields['category_id'], due_date=fields['due_date'])
         if fields['tags']:
             task.set_tags(fields['tags'])
-
         task.save('Erro ao criar task')
-        logger.info('Task criada: id=%s', task.id)
-        self._notify_assignment(task)
+        logger.info('Task criada: %s - %s', task.id, task.title)
+
+        if assignee is not None:
+            self.notifier.notify_task_assigned(assignee, task)
         return task.to_dict()
 
-    def update_task(self, task_id, data):
+    def update_task(self, task_id, payload):
         task = self._get_or_404(task_id)
-        changes = validate_task_update(data)
-        if 'user_id' in changes:
-            ensure_user_exists(changes['user_id'])
-        if 'category_id' in changes:
-            ensure_category_exists(changes['category_id'])
-        if changes.get('due_date'):
-            changes['due_date'] = parse_due_date(changes['due_date'], UPDATE_DATE_ERROR)
-        elif 'due_date' in changes:
-            changes['due_date'] = None
+        changes = validate_task_update(payload)
+        assignee = self._ensure_references(changes.get('user_id'), changes.get('category_id'))
+        previous_user_id = task.user_id
 
-        reassigned = 'user_id' in changes and changes['user_id'] != task.user_id
         for field in ('title', 'description', 'status', 'priority', 'user_id', 'category_id', 'due_date'):
             if field in changes:
                 setattr(task, field, changes[field])
         if 'tags' in changes:
             task.set_tags(changes['tags'])
         task.updated_at = utcnow()
-
         task.save('Erro ao atualizar')
-        logger.info('Task atualizada: id=%s', task.id)
-        if reassigned:
-            self._notify_assignment(task)
+        logger.info('Task atualizada: %s', task.id)
+
+        if assignee is not None and task.user_id != previous_user_id:
+            self.notifier.notify_task_assigned(assignee, task)
         return task.to_dict()
 
     def delete_task(self, task_id):
         task = self._get_or_404(task_id)
         task.delete('Erro ao deletar')
-        logger.info('Task deletada: id=%s', task_id)
+        logger.info('Task deletada: %s', task_id)
         return {'message': 'Task deletada com sucesso'}
 
-    def search_tasks(self, text, status, priority, user_id, page=None, per_page=None):
-        filters = validate_search_filters(text, status, priority, user_id)
-        return [task.to_dict() for task in Task.search(**filters, page=page, per_page=per_page)]
+    def search_tasks(self, text, status, priority, user_id):
+        return [task.to_dict() for task in Task.search(text, status, priority, user_id)]
 
     def stats(self):
         total = Task.count()
         by_status = Task.count_by_status()
+        done = by_status.get(STATUS_DONE, 0)
         return {
             'total': total,
-            **by_status,
-            'overdue': Task.count_overdue(utcnow()),
-            'completion_rate': percentage(by_status[STATUS_DONE], total),
+            'pending': by_status.get(STATUS_PENDING, 0),
+            'in_progress': by_status.get(STATUS_IN_PROGRESS, 0),
+            'done': done,
+            'cancelled': by_status.get(STATUS_CANCELLED, 0),
+            'overdue': Task.count_overdue(),
+            'completion_rate': completion_rate(done, total),
         }

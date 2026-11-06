@@ -1,0 +1,32 @@
+"""Constantes de regra de negócio usadas por models, validators e controllers."""
+
+STATUS_PENDING = 'pending'
+STATUS_IN_PROGRESS = 'in_progress'
+STATUS_DONE = 'done'
+STATUS_CANCELLED = 'cancelled'
+TASK_STATUSES = (STATUS_PENDING, STATUS_IN_PROGRESS, STATUS_DONE, STATUS_CANCELLED)
+CLOSED_STATUSES = (STATUS_DONE, STATUS_CANCELLED)
+
+ROLE_USER = 'user'
+ROLE_ADMIN = 'admin'
+ROLE_MANAGER = 'manager'
+USER_ROLES = (ROLE_USER, ROLE_ADMIN, ROLE_MANAGER)
+DEFAULT_ROLE = ROLE_USER
+REPORT_ROLES = (ROLE_ADMIN, ROLE_MANAGER)
+
+TITLE_MIN_LENGTH = 3
+TITLE_MAX_LENGTH = 200
+PRIORITY_MIN = 1
+PRIORITY_MAX = 5
+DEFAULT_PRIORITY = 3
+HIGH_PRIORITY_THRESHOLD = 2  # prioridade <= 2 conta como "alta" no relatório do usuário
+PRIORITY_LABELS = {1: 'critical', 2: 'high', 3: 'medium', 4: 'low', 5: 'minimal'}
+
+MIN_PASSWORD_LENGTH = 4
+EMAIL_REGEX = r'^[a-zA-Z0-9+_.-]+@[a-zA-Z0-9.-]+$'
+
+DEFAULT_COLOR = '#000000'
+COLOR_LENGTH = 7
+
+DATE_FORMAT = '%Y-%m-%d'
+RECENT_ACTIVITY_DAYS = 7

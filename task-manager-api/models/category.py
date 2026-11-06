@@ -1,13 +1,12 @@
+from sqlalchemy import func
+
 from database import db
-from models.base import CrudMixin, paginate
+from models.base import commit, paginate
+from utils.constants import DEFAULT_COLOR
 from utils.time import utcnow
 
-DEFAULT_COLOR = '#000000'
 
-
-class Category(CrudMixin, db.Model):
-    # Ao apagar uma categoria, o ORM anula tasks.category_id (relação Category.tasks)
-    # na mesma transação, evitando referências órfãs.
+class Category(db.Model):
     __tablename__ = 'categories'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -26,5 +25,31 @@ class Category(CrudMixin, db.Model):
         }
 
     @classmethod
-    def list_all(cls, page=None, per_page=None):
-        return paginate(cls.query.order_by(cls.id), page, per_page).all()
+    def find(cls, category_id):
+        return db.session.get(cls, category_id)
+
+    @classmethod
+    def list(cls, page=None, per_page=None):
+        return paginate(cls.query.order_by(cls.id), page, per_page)
+
+    @classmethod
+    def count(cls):
+        return cls.query.count()
+
+    @staticmethod
+    def task_counts():
+        """{category_id: quantidade de tasks} numa única query agregada."""
+        from models.task import Task
+        rows = db.session.query(Task.category_id, func.count(Task.id)).group_by(Task.category_id).all()
+        return dict(rows)
+
+    def save(self, error_message):
+        db.session.add(self)
+        commit(error_message)
+
+    def delete(self, error_message):
+        """Remove a categoria desassociando as tasks na mesma transação (sem FKs órfãs)."""
+        from models.task import Task
+        Task.query.filter_by(category_id=self.id).update({Task.category_id: None})
+        db.session.delete(self)
+        commit(error_message)
