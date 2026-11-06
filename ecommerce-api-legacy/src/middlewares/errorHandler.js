@@ -1,19 +1,13 @@
 const { HttpError } = require('../errors/HttpError');
 
-const CLIENT_ERROR_MIN = 400;
-const SERVER_ERROR_MIN = 500;
-
-function createErrorHandler(logger) {
-    // eslint-disable-next-line no-unused-vars
-    return (err, req, res, next) => {
+// Mantém o contrato original: erros respondem texto puro com o mesmo status/mensagem.
+function createErrorHandler({ logger }) {
+    // A assinatura com 4 parâmetros é o que faz o Express tratar isto como middleware de erro.
+    return (err, req, res, next) => { // eslint-disable-line no-unused-vars
         if (err instanceof HttpError) return res.status(err.status).send(err.message);
+        if (err.type === 'entity.parse.failed') return res.status(400).send('Bad Request');
 
-        // Erros do body parser (JSON malformado, payload grande etc.).
-        if (err.status >= CLIENT_ERROR_MIN && err.status < SERVER_ERROR_MIN) {
-            return res.status(err.status).send('Bad Request');
-        }
-
-        logger.error(`${req.method} ${req.originalUrl} falhou:`, err);
+        logger.error('Erro não tratado', { method: req.method, path: req.path, error: err.message });
         return res.status(500).send('Erro interno do servidor');
     };
 }

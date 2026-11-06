@@ -1,16 +1,14 @@
-const LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
+const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
 
 function createLogger(level = 'info') {
     const threshold = LEVELS[level] ?? LEVELS.info;
-    const write = (name, method) => (...args) => {
-        if (LEVELS[name] <= threshold) method(`[${name.toUpperCase()}]`, ...args);
+    const write = (name) => (message, meta) => {
+        if (LEVELS[name] < threshold) return;
+        const line = `[${new Date().toISOString()}] ${name.toUpperCase()} ${message}`;
+        const stream = LEVELS[name] >= LEVELS.warn ? process.stderr : process.stdout;
+        stream.write(meta === undefined ? `${line}\n` : `${line} ${JSON.stringify(meta)}\n`);
     };
-    return {
-        error: write('error', console.error),
-        warn: write('warn', console.warn),
-        info: write('info', console.log),
-        debug: write('debug', console.log),
-    };
+    return { debug: write('debug'), info: write('info'), warn: write('warn'), error: write('error') };
 }
 
 module.exports = { createLogger };

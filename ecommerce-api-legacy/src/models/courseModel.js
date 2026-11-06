@@ -1,9 +1,7 @@
-const ACTIVE = 1;
-
 function createCourseModel(db) {
     return {
         findActiveById(id) {
-            return db.get('SELECT * FROM courses WHERE id = ? AND active = ?', [id, ACTIVE]);
+            return db.get('SELECT id, title, price FROM courses WHERE id = ? AND active = 1', [id]);
         },
     };
 }

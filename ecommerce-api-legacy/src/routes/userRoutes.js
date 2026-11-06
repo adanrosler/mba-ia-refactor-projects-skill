@@ -1,11 +1,13 @@
 const express = require('express');
 const { asyncHandler } = require('../middlewares/asyncHandler');
 
-function createUserRoutes(controller, requireAdmin) {
+function createUserRoutes({ userController, requireAdmin }) {
     const router = express.Router();
+
     router.delete('/users/:id', requireAdmin, asyncHandler(async (req, res) => {
-        res.send(await controller.deleteUser(req.params.id));
+        res.send(await userController.deleteUser(req.params.id));
     }));
+
     return router;
 }
 

@@ -1,8 +1,8 @@
 const express = require('express');
-const config = require('./config');
+const { loadConfig } = require('./config');
 const { createLogger } = require('./utils/logger');
-const { createConnection } = require('./database/connection');
-const { initSchema, seed } = require('./database/seed');
+const { createDatabase } = require('./database/connection');
+const { initDatabase } = require('./database/seed');
 const { createUserModel } = require('./models/userModel');
 const { createCourseModel } = require('./models/courseModel');
 const { createEnrollmentModel } = require('./models/enrollmentModel');
@@ -17,46 +17,54 @@ const { createUserController } = require('./controllers/userController');
 const { createCheckoutRoutes } = require('./routes/checkoutRoutes');
 const { createAdminRoutes } = require('./routes/adminRoutes');
 const { createUserRoutes } = require('./routes/userRoutes');
-const { createRequireAdmin } = require('./middlewares/auth');
+const { requireAdmin } = require('./middlewares/auth');
 const { createErrorHandler } = require('./middlewares/errorHandler');
 
-const logger = createLogger(config.logLevel);
+// Composition root: cria dependências, injeta nas camadas e sobe o servidor.
+async function main() {
+    const config = loadConfig();
+    const logger = createLogger(config.logLevel);
 
-async function bootstrap() {
-    const db = await createConnection(config.databaseFile);
-    await initSchema(db);
-    await seed(db);
+    const db = createDatabase(config.dbFile);
+    await initDatabase(db);
+    const transaction = (work) => db.transaction(work);
 
     const models = {
-        users: createUserModel(db),
-        courses: createCourseModel(db),
-        enrollments: createEnrollmentModel(db),
-        payments: createPaymentModel(db),
-        auditLogs: createAuditLogModel(db),
-        reports: createReportModel(db),
+        userModel: createUserModel(db),
+        courseModel: createCourseModel(db),
+        enrollmentModel: createEnrollmentModel(db),
+        paymentModel: createPaymentModel(db),
+        auditLogModel: createAuditLogModel(db),
+        reportModel: createReportModel(db),
     };
     const services = {
-        payment: createPaymentService({ gatewayKey: config.paymentGatewayKey, logger }),
-        cache: createCacheService({ logger }),
+        paymentService: createPaymentService({ gatewayKey: config.paymentGatewayKey, logger }),
+        cacheService: createCacheService({ logger }),
     };
-    const { withTransaction } = db;
+    const controllers = {
+        checkoutController: createCheckoutController({ transaction, models, services }),
+        reportController: createReportController({ models }),
+        userController: createUserController({ transaction, models }),
+    };
 
-    if (!config.adminToken) logger.warn('ADMIN_TOKEN não definida; rotas administrativas sem autenticação');
-    const requireAdmin = createRequireAdmin(config.adminToken);
+    if (!config.adminToken) {
+        logger.warn('ADMIN_TOKEN não definido; rotas protegidas responderão 401 até ser configurado');
+    }
+    const adminOnly = requireAdmin(config.adminToken);
 
     const app = express();
     app.use(express.json());
-    app.use('/api', createCheckoutRoutes(createCheckoutController({ models, services, withTransaction })));
-    app.use('/api', createAdminRoutes(createReportController({ models }), requireAdmin));
-    app.use('/api', createUserRoutes(createUserController({ models, withTransaction }), requireAdmin));
-    app.use(createErrorHandler(logger));
+    app.use('/api', createCheckoutRoutes(controllers));
+    app.use('/api', createAdminRoutes({ ...controllers, requireAdmin: adminOnly }));
+    app.use('/api', createUserRoutes({ ...controllers, requireAdmin: adminOnly }));
+    app.use(createErrorHandler({ logger }));
 
     app.listen(config.port, config.host, () => {
-        logger.info(`LMS API rodando em http://${config.host}:${config.port}`);
+        logger.info(`Frankenstein LMS rodando em http://${config.host}:${config.port}`);
     });
 }
 
-bootstrap().catch((err) => {
-    logger.error('Falha ao iniciar a aplicação:', err);
-    process.exitCode = 1;
+main().catch((err) => {
+    process.stderr.write(`Falha ao iniciar a aplicação: ${err.stack || err}\n`);
+    process.exit(1);
 });

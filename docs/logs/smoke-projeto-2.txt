@@ -1,13 +1,30 @@
---- listen:
-node    3289 adanrosler   15u  IPv4 0x4b159b77b602ba46      0t0  TCP 127.0.0.1:3000 (LISTEN)
+## Servidor com ADMIN_TOKEN definido
 ✓ POST /api/checkout → 200
 ✓ POST /api/checkout → 400
-✓ GET /api/admin/financial-report → 200
-✓ DELETE /api/users/1 → 200
-/private/tmp/claude-501/-Users-adanrosler-dev-mba-ia-refactor-projects-skill/c498b000-7f62-4d8e-9576-2a0840a73956/scratchpad/validate.sh: line 16:  3271 Terminated: 15          HOST=127.0.0.1 PORT=$PORT $CMD > $LOG 2>&1
---- server log:
-[WARN] PAYMENT_GATEWAY_KEY não definida; gateway de pagamento em modo simulado
-[WARN] ADMIN_TOKEN não definida; rotas administrativas sem autenticação
-[INFO] LMS API rodando em http://127.0.0.1:3000
-[INFO] Processando pagamento de 497 no cartão ****4444
-[INFO] Processando pagamento de 997 no cartão ****4444
+✓ GET /api/admin/financial-report (sem token) → 401
+✓ GET /api/admin/financial-report (token inválido) → 401
+✓ DELETE /api/users/1 (sem token) → 401
+✓ DELETE /api/users/1 (token inválido) → 401
+✓ GET /api/admin/financial-report (com token) → 200
+✓ DELETE /api/users/1 (com token) → 200
+
+## Servidor SEM ADMIN_TOKEN (fail-closed)
+✓ POST /api/checkout → 200
+✓ POST /api/checkout → 400
+✓ GET /api/admin/financial-report (sem token) → 401
+✓ GET /api/admin/financial-report (token inválido) → 401
+✓ DELETE /api/users/1 (sem token) → 401
+✓ DELETE /api/users/1 (token inválido) → 401
+- ADMIN_TOKEN não exportado: verificações com token válido puladas (modo sem credencial)
+
+--- server log (com ADMIN_TOKEN):
+[2026-11-06T15:27:13.331Z] WARN PAYMENT_GATEWAY_KEY não definido; gateway de pagamento em modo simulado
+[2026-11-06T15:27:13.337Z] INFO Frankenstein LMS rodando em http://127.0.0.1:3000
+[2026-11-06T15:27:13.493Z] INFO Processando pagamento {"card":"****4444","simulated":true}
+[2026-11-06T15:27:13.566Z] INFO Processando pagamento {"card":"****4444","simulated":true}
+--- server log (sem ADMIN_TOKEN):
+[2026-11-06T15:27:14.034Z] WARN PAYMENT_GATEWAY_KEY não definido; gateway de pagamento em modo simulado
+[2026-11-06T15:27:14.035Z] WARN ADMIN_TOKEN não definido; rotas protegidas responderão 401 até ser configurado
+[2026-11-06T15:27:14.040Z] INFO Frankenstein LMS rodando em http://127.0.0.1:3000
+[2026-11-06T15:27:14.062Z] INFO Processando pagamento {"card":"****4444","simulated":true}
+[2026-11-06T15:27:14.126Z] INFO Processando pagamento {"card":"****4444","simulated":true}

@@ -1,14 +1,17 @@
-function createUserController({ models, withTransaction }) {
-    const { users, enrollments, payments } = models;
+const USER_DELETED_MESSAGE = 'Usuário deletado, junto com suas matrículas e pagamentos.';
+
+function createUserController({ transaction, models }) {
+    const { userModel, enrollmentModel, paymentModel } = models;
 
     return {
         async deleteUser(id) {
-            await withTransaction(async () => {
-                await payments.deleteByUser(id);
-                await enrollments.deleteByUser(id);
-                await users.deleteById(id);
+            // Remove dependentes e usuário atomicamente: nenhum registro órfão.
+            await transaction(async () => {
+                await paymentModel.deleteByUserId(id);
+                await enrollmentModel.deleteByUserId(id);
+                await userModel.deleteById(id);
             });
-            return 'Usuário deletado';
+            return USER_DELETED_MESSAGE;
         },
     };
 }

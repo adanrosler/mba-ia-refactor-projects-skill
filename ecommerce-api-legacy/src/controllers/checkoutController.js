@@ -1,38 +1,38 @@
 const { validateCheckout } = require('../validators/checkoutValidator');
-const { notFound, badRequest } = require('../errors/HttpError');
+const { badRequest, notFound } = require('../errors/HttpError');
 const { PAYMENT_STATUS } = require('../models/paymentModel');
 const { hashPassword, generateRandomPassword } = require('../utils/password');
 
-function createCheckoutController({ models, services, withTransaction }) {
-    const { users, courses, enrollments, payments, auditLogs } = models;
-    const { payment, cache } = services;
+function createCheckoutController({ transaction, models, services }) {
+    const { userModel, courseModel, enrollmentModel, paymentModel, auditLogModel } = models;
+    const { paymentService, cacheService } = services;
+
+    async function findOrCreateUser({ name, email, password }) {
+        const existingId = await userModel.findIdByEmail(email);
+        if (existingId) return existingId;
+        const passwordHash = await hashPassword(password || generateRandomPassword());
+        return userModel.create({ name, email, passwordHash });
+    }
 
     return {
         async checkout(body) {
-            const input = validateCheckout(body);
+            const order = validateCheckout(body);
 
-            const course = await courses.findActiveById(input.courseId);
+            const course = await courseModel.findActiveById(order.courseId);
             if (!course) throw notFound('Curso não encontrado');
 
-            const status = payment.charge(input.card, course.price);
-            if (status === PAYMENT_STATUS.DENIED) throw badRequest('Pagamento recusado');
+            const paymentStatus = paymentService.charge(order.card);
+            if (paymentStatus !== PAYMENT_STATUS.PAID) throw badRequest('Pagamento recusado');
 
-            const { userId, enrollmentId } = await withTransaction(async () => {
-                const existing = await users.findByEmail(input.email);
-                const id = existing
-                    ? existing.id
-                    : await users.create({
-                        name: input.name,
-                        email: input.email,
-                        passwordHash: await hashPassword(input.password || generateRandomPassword()),
-                    });
-                const newEnrollmentId = await enrollments.create(id, input.courseId);
-                await payments.create(newEnrollmentId, course.price, status);
-                await auditLogs.record(`Checkout curso ${input.courseId} por ${id}`);
-                return { userId: id, enrollmentId: newEnrollmentId };
+            const { userId, enrollmentId } = await transaction(async () => {
+                const buyerId = await findOrCreateUser(order);
+                const newEnrollmentId = await enrollmentModel.create({ userId: buyerId, courseId: course.id });
+                await paymentModel.create({ enrollmentId: newEnrollmentId, amount: course.price, status: paymentStatus });
+                await auditLogModel.record(`Checkout curso ${course.id} por ${buyerId}`);
+                return { userId: buyerId, enrollmentId: newEnrollmentId };
             });
 
-            cache.set(`last_checkout_${userId}`, course.title);
+            cacheService.set(`last_checkout_${userId}`, course.title);
             return { msg: 'Sucesso', enrollment_id: enrollmentId };
         },
     };

@@ -1,11 +1,14 @@
 function createCacheService({ logger }) {
     const store = new Map();
+
     return {
         set(key, value) {
-            logger.debug(`Salvando no cache: ${key}`);
+            logger.debug('Salvando no cache', { key });
             store.set(key, value);
         },
-        get: (key) => store.get(key),
+        get(key) {
+            return store.get(key);
+        },
     };
 }
 

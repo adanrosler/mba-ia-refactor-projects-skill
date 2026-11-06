@@ -1,17 +1,25 @@
 const { badRequest } = require('../errors/HttpError');
 
-const isNonEmptyString = (value) => typeof value === 'string' && value.length > 0;
+const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !== '';
 
-// Chaves públicas do contrato: usr, eml, pwd (opcional), c_id, card.
+function parseId(value) {
+    if (Number.isInteger(value) && value > 0) return value;
+    if (typeof value === 'string' && /^[1-9]\d*$/.test(value)) return Number(value);
+    return null;
+}
+
+// Mantém as chaves públicas do contrato (usr, eml, pwd, c_id, card) e devolve nomes internos claros.
 function validateCheckout(body) {
-    if (!body || typeof body !== 'object') throw badRequest();
+    const { usr, eml, pwd, c_id: courseIdInput, card } = body || {};
+    const courseId = parseId(courseIdInput);
+    const passwordValid = pwd === undefined || pwd === null || typeof pwd === 'string';
 
-    const { usr: name, eml: email, pwd: password, c_id: courseId, card } = body;
-    if (!name || !email || !courseId || !card) throw badRequest();
-    if (!isNonEmptyString(name) || !isNonEmptyString(email) || !isNonEmptyString(card)) throw badRequest();
-    if (password !== undefined && password !== null && typeof password !== 'string') throw badRequest();
+    if (!isNonEmptyString(usr) || !isNonEmptyString(eml) || !courseId
+        || !isNonEmptyString(card) || !passwordValid) {
+        throw badRequest();
+    }
 
-    return { name, email, password: password || null, courseId, card };
+    return { name: usr, email: eml, password: pwd || null, courseId, card };
 }
 
 module.exports = { validateCheckout };

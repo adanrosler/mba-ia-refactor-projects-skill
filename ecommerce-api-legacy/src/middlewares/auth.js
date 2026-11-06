@@ -1,16 +1,16 @@
 const crypto = require('crypto');
-const { unauthorized } = require('../errors/HttpError');
 
-// Exige `Authorization: Bearer <ADMIN_TOKEN>` somente quando o token está configurado.
-function createRequireAdmin(adminToken) {
-    const expected = adminToken ? Buffer.from(adminToken) : null;
+const BEARER_PREFIX = /^Bearer /;
 
+// Fail-closed: nega quando o token falta, não confere ou ADMIN_TOKEN não está configurado.
+function requireAdmin(adminToken) {
     return (req, res, next) => {
-        if (!expected) return next();
-        const sent = Buffer.from((req.get('authorization') || '').replace(/^Bearer /, ''));
-        const valid = sent.length === expected.length && crypto.timingSafeEqual(sent, expected);
-        return valid ? next() : next(unauthorized());
+        const sent = (req.get('authorization') || '').replace(BEARER_PREFIX, '');
+        const authorized = Boolean(adminToken) && Boolean(sent)
+            && sent.length === adminToken.length
+            && crypto.timingSafeEqual(Buffer.from(sent), Buffer.from(adminToken));
+        return authorized ? next() : res.status(401).json({ error: 'Não autorizado' });
     };
 }
 
-module.exports = { createRequireAdmin };
+module.exports = { requireAdmin };
