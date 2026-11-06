@@ -17,6 +17,9 @@ seguido pela pergunta de confirmação. Nenhum arquivo é criado ou alterado nes
    mascarando segredos: mostre no máximo os 4 primeiros caracteres + `***`).
 6. **Impact** explica a consequência concreta (o que um atacante/desenvolvedor sofre).
 7. **Recommendation** cita a transformação do playbook (`Txx`) e o destino na arquitetura MVC.
+   Em findings AP-04, a recomendação é sempre autenticação **obrigatória e fail-closed** (401
+   sem token e 401 quando a credencial não estiver configurada) — nunca "opcional", "ativável
+   por env" ou "desligada por padrão". Liste os endpoints que passarão a exigir credencial.
 8. O **Summary** precisa bater com a contagem de findings listados.
 9. A seção **Deprecated APIs** é obrigatória: liste cada uso ou escreva `None found`.
 10. Mínimo esperado: **5 findings**, com pelo menos **1 CRITICAL ou HIGH**. Se encontrar menos,

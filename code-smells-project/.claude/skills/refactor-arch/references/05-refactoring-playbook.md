@@ -64,7 +64,7 @@ const config = Object.freeze({
   host: process.env.HOST || '127.0.0.1',
   db: { user: process.env.DB_USER, password: process.env.DB_PASS },
   paymentGatewayKey: process.env.PAYMENT_GATEWAY_KEY, // undefined → modo simulado
-  adminToken: process.env.ADMIN_TOKEN,
+  adminToken: process.env.ADMIN_TOKEN,             // undefined → rotas protegidas negam (401)
 });
 module.exports = config;
 ```
@@ -175,14 +175,18 @@ def run_sql():
     cursor.execute(request.get_json()["sql"])
 ```
 **Depois** — removido da API. Se houver necessidade operacional comprovada, mantenha atrás de
-flag desligada por padrão **e** autenticação:
+flag desligada por padrão **e** da autenticação fail-closed abaixo (a flag não substitui o token):
 ```python
 # routes/admin_routes.py
 if Settings.ENABLE_ADMIN_TOOLS:          # env ENABLE_ADMIN_TOOLS=true, default False
     admin_bp.add_url_rule("/admin/...", view_func=require_admin(controller.reset), methods=["POST"])
 ```
 
-**Autorização ativável por configuração (preserva contrato quando não configurada)**
+**Autorização obrigatória e fail-closed (credencial estática)**
+
+Regra: a rota **nega** quando o token não foi enviado, não confere **ou não está configurado**
+no ambiente. Não existe "modo compatível" nem flag que desligue a verificação. Aplique a todos
+os endpoints citados no finding AP-04 (incluindo os de admin habilitados por flag).
 
 Python:
 ```python
@@ -194,26 +198,32 @@ from flask import request, jsonify, current_app
 def require_admin(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
-        token = current_app.config.get("ADMIN_TOKEN")
-        if token:  # só exige quando configurado
-            sent = request.headers.get("Authorization", "").removeprefix("Bearer ")
-            if not hmac.compare_digest(sent, token):
-                return jsonify({"error": "Não autorizado"}), 401
+        expected = current_app.config.get("ADMIN_TOKEN")
+        sent = request.headers.get("Authorization", "").removeprefix("Bearer ")
+        # sem credencial configurada → ninguém passa (fail-closed)
+        if not expected or not sent or not hmac.compare_digest(sent, expected):
+            return jsonify({"error": "Não autorizado"}), 401
         return view(*args, **kwargs)
     return wrapper
+
+# app.py (composition root)
+if not settings.ADMIN_TOKEN:
+    logger.warning("ADMIN_TOKEN não definido; rotas protegidas responderão 401 até ser configurado")
 ```
 JS:
 ```js
 // src/middlewares/auth.js
 const crypto = require('crypto');
 module.exports = (adminToken) => (req, res, next) => {
-  if (!adminToken) return next();                       // modo compatível (warning no boot)
   const sent = (req.get('authorization') || '').replace(/^Bearer /, '');
-  const ok = sent.length === adminToken.length &&
+  const ok = Boolean(adminToken) && sent.length === adminToken.length &&   // sem token configurado → nega
     crypto.timingSafeEqual(Buffer.from(sent), Buffer.from(adminToken));
   return ok ? next() : res.status(401).json({ error: 'Não autorizado' });
 };
 ```
+
+**Autenticação por usuário (token assinado do login) — sempre ligada**
+
 **Token falso no login — antes:** `token = "prefixo-" + str(user.id)`
 **Depois:** token assinado e com expiração, mantendo a chave `token` na resposta:
 ```python
@@ -221,6 +231,36 @@ from itsdangerous import URLSafeTimedSerializer
 def issue_token(user_id):
     return URLSafeTimedSerializer(current_app.config["SECRET_KEY"]).dumps({"uid": user_id})
 ```
+Decorator sem chave de liga/desliga; papel insuficiente → 403:
+```python
+# middlewares/auth.py
+def require_auth(roles=None):
+    def decorator(view):
+        @wraps(view)
+        def wrapper(*args, **kwargs):
+            user = user_from_bearer_token()          # None se ausente, inválido ou expirado
+            if user is None:
+                raise UnauthorizedError("Não autorizado")      # → 401
+            if roles and user.role not in roles:
+                raise ForbiddenError("Permissão negada")       # → 403
+            g.current_user = user
+            return view(*args, **kwargs)
+        return wrapper
+    return decorator
+```
+Escalonamento de privilégio (cadastro público que aceita `role`): o cadastro com o papel padrão
+pode continuar anônimo, mas papel acima do padrão exige admin autenticado:
+```python
+# controllers/account_controller.py
+def create_account(self, data, actor):
+    role = data.get("role", DEFAULT_ROLE)
+    if role != DEFAULT_ROLE:
+        if actor is None:
+            raise UnauthorizedError("Não autorizado")          # anônimo → 401
+        if actor.role != ROLE_ADMIN:
+            raise ForbiddenError("Permissão negada")           # não-admin → 403
+```
+**Nunca** escreva `if not settings.AUTH_ENABLED: return view(...)` ou equivalente.
 
 ---
 

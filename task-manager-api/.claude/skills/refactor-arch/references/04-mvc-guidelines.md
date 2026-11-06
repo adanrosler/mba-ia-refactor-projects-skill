@@ -118,11 +118,26 @@ A refatoração **não pode quebrar clientes**. Para cada endpoint do inventári
 
 - Remover de respostas campos sensíveis (senha, hash, segredo, configuração interna).
 - Remover ou desabilitar por padrão endpoints que executam SQL/comandos arbitrários ou apagam
-  o banco inteiro (habilitáveis só via variável de ambiente explícita, desligada por padrão).
-- Proteção de endpoints administrativos que **hoje respondem sem credencial**: implementar o
-  middleware/decorator de autorização **ativável por configuração** (ex.: `ADMIN_TOKEN`); se a
-  variável não estiver definida, o comportamento original é mantido e um *warning* é logado no
-  boot. Assim o contrato é preservado e a proteção fica pronta para produção.
+  o banco inteiro (habilitáveis só via variável de ambiente explícita, desligada por padrão — e,
+  mesmo habilitados, sempre atrás da autenticação fail-closed abaixo).
+- Proteção de endpoints sensíveis que **hoje respondem sem credencial** (todo endpoint citado
+  em finding AP-04: administrativo, financeiro, destrutivo, relatório com dados pessoais,
+  escalonamento de papel). A proteção é **obrigatória e fail-closed** — nunca opcional nem
+  ativável por flag:
+  - **Credencial estática** (ex.: `ADMIN_TOKEN`): o middleware/decorator **nega com 401** quando
+    o header `Authorization: Bearer <token>` falta, é inválido **ou quando a credencial não está
+    configurada** no ambiente. Sem a variável, ninguém acessa a rota (o boot loga um *warning*
+    dizendo que as rotas protegidas ficarão bloqueadas até a variável ser definida).
+  - **Credencial por usuário** (token assinado emitido pelo login): a verificação está sempre
+    ligada; sem token válido → 401; papel insuficiente → 403. Operações que concedem privilégio
+    (ex.: criar usuário com papel acima do padrão) exigem um usuário autenticado com papel
+    administrativo; o cadastro com o papel padrão pode continuar público se já era.
+  - **Proibido:** "modo compatível", flag desligada por padrão (`AUTH_ENABLED=false`,
+    `if (!token) return next()`) ou qualquer caminho em que a rota responda 200 a um cliente
+    anônimo por falta de configuração.
+  - O status anônimo dessas rotas muda de 200 para 401 — registre em "Contract notes". Com a
+    credencial correta, status e formato de resposta continuam iguais aos da baseline.
+  - Endpoints que não aparecem em finding AP-04 mantêm o contrato original (sem auth nova).
 - Mensagens que descrevem o próprio defeito (ex.: "registro removido, mas dependentes ficaram órfãos") podem ser corrigidas junto com o bug,
   mantendo status e tipo de resposta.
 
@@ -148,3 +163,5 @@ A refatoração **não pode quebrar clientes**. Para cada endpoint do inventári
 - [ ] Entry point claro (composition root)
 - [ ] Aplicação inicia sem erros
 - [ ] Endpoints originais respondem como antes
+- [ ] Endpoints sensíveis (AP-04) negam acesso anônimo — 401 sem token, 401 sem credencial
+      configurada, 200 com token válido

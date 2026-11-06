@@ -83,7 +83,11 @@ Leia `references/04-mvc-guidelines.md` e `references/05-refactoring-playbook.md`
    leitura + as de escrita com payloads válidos (derivados das validações do código e dos
    dados de seed) + pelo menos um caso de erro de validação/não encontrado por recurso.
    Ordene para que escritas que apagam dados venham por último. Não inclua endpoints que
-   executam SQL arbitrário ou apagam o banco inteiro.
+   executam SQL arbitrário ou apagam o banco inteiro. Marque no plano os **endpoints
+   protegidos** (todos os citados em findings AP-04): depois da refatoração eles serão
+   chamados com `Authorization: Bearer <token>`. Defina a credencial de teste: credencial
+   estática → um valor aleatório para a variável (ex.: `ADMIN_TOKEN=$(openssl rand -hex 16)`);
+   credencial por usuário → login com um usuário administrativo do seed.
 5. Suba a aplicação **original** sem editar o código e **sempre em `127.0.0.1`** (nunca
    `0.0.0.0`), na porta original:
    - Flask com host fixo no código → use a CLI: `<venv>/bin/flask --app <módulo> run --host
@@ -123,16 +127,27 @@ Leia `references/04-mvc-guidelines.md` e `references/05-refactoring-playbook.md`
 1. **Compilação/sintaxe:** Python → `python -m compileall -q <pastas do projeto>` (excluindo
    venv); Node → `node --check` em cada arquivo `.js` alterado.
 2. **Boot:** resete o banco (e rode o seed, se o projeto tiver script de seed), suba a
-   aplicação com o **mesmo comando original** em `127.0.0.1`; confirme no log que iniciou sem
-   erros/tracebacks.
-3. **Endpoints:** execute o mesmo plano de requisições e salve em `$TMP/after.txt`. Compare com
-   a baseline: para cada requisição, **status igual** e **mesmas chaves de topo/tipo de corpo**,
-   exceto as mudanças intencionais listadas em "Contract notes".
-4. **Verificação de anti-patterns:** repita os greps de detecção dos findings corrigidos
+   aplicação com o **mesmo comando original** em `127.0.0.1`, com a credencial de teste
+   definida no ambiente; confirme no log que iniciou sem erros/tracebacks.
+3. **Endpoints:** execute o mesmo plano de requisições (endpoints protegidos **com** o token
+   válido) e salve em `$TMP/after.txt`. Compare com a baseline: para cada requisição, **status
+   igual** e **mesmas chaves de topo/tipo de corpo**, exceto as mudanças intencionais listadas
+   em "Contract notes".
+4. **Autenticação (obrigatório quando há finding AP-04):** para **cada** endpoint protegido,
+   registre em `$TMP/auth.txt` e exija:
+   - sem header `Authorization` → **401**;
+   - com token inválido (`Bearer invalido`) → **401**;
+   - com token válido → **200** (ou o status de sucesso da baseline);
+   - credencial por usuário com papel insuficiente → **403**; escalonamento de papel por
+     cliente anônimo (ex.: criar usuário com papel administrativo sem token) → **401**.
+   Depois **reinicie a aplicação sem a credencial configurada** (variável removida do ambiente)
+   e confirme que os mesmos endpoints continuam respondendo **401** — nunca 200. Qualquer 200
+   anônimo é falha: corrija o middleware (fail-closed, `04-mvc-guidelines.md` §5) e repita.
+5. **Verificação de anti-patterns:** repita os greps de detecção dos findings corrigidos
    (ex.: concatenação em SQL, segredos literais, `print(`/`console.log(`, APIs deprecated) e
    confirme que não restam ocorrências.
-5. Se qualquer verificação falhar: corrija e repita a validação. Encerre o servidor ao final.
-6. Restaure o estado do banco: apague os bancos criados pela validação e devolva os backups
+6. Se qualquer verificação falhar: corrija e repita a validação. Encerre o servidor ao final.
+7. Restaure o estado do banco: apague os bancos criados pela validação e devolva os backups
    de `$TMP` (se havia).
 
 ### 3.4 Saída final da Fase 3
@@ -154,11 +169,13 @@ PHASE 3: REFACTORING COMPLETE
 ## Validation
   ✓/✗ Application boots without errors (<comando>)
   ✓/✗ All endpoints respond correctly (<x>/<y> requests match baseline)
+  ✓/✗ Sensitive endpoints deny anonymous access (<n> endpoints: 401 without token, 401 with invalid token, 401 with credential unset, 200 with valid token)
   ✓/✗ Zero anti-patterns remaining from the report (<detalhe de pendências, se houver>)
   ✓/✗ MVC checklist (04-mvc-guidelines §7)
 
 ## How to run
-<comando de execução e variáveis de ambiente suportadas>
+<comando de execução e variáveis de ambiente suportadas; destaque a credencial exigida pelos
+endpoints protegidos (sem ela, esses endpoints respondem 401)>
 ================================
 ```
 
