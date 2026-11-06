@@ -10,11 +10,13 @@ A skill `refactor-arch` (Claude Code) faz três coisas, em fases sequenciais:
 
 A mesma skill, sem nenhuma alteração, foi executada nos 3 projetos: dois em Python/Flask e um em Node.js/Express.
 
-| Projeto | Stack | Findings | Smoke test após refatoração |
-|---|---|---|---|
-| `code-smells-project/` | Python 3.13 + Flask 3.1 + sqlite3 | 19 (7 C / 3 H / 5 M / 4 L) | **14/14 ✓** |
-| `ecommerce-api-legacy/` | Node.js 20 + Express 4 + sqlite3 | 19 (5 C / 4 H / 6 M / 4 L) | **4/4 ✓** |
-| `task-manager-api/` | Python 3.13 + Flask 3.0 + SQLAlchemy | 16 (3 C / 3 H / 6 M / 4 L) | **22/22 ✓** |
+| Projeto | Stack | Findings | Smoke test após refatoração | Endpoints sensíveis (fail-closed) |
+|---|---|---|---|---|
+| `code-smells-project/` | Python 3.13 + Flask 3.1 + sqlite3 | 18 (6 C / 3 H / 5 M / 4 L) | **65/65 ✓** | 10 |
+| `ecommerce-api-legacy/` | Node.js 20 + Express 4 + sqlite3 | 16 (4 C / 4 H / 5 M / 3 L) | **14/14 ✓** | 2 |
+| `task-manager-api/` | Python 3.13 + Flask 3.0 + SQLAlchemy | 18 (4 C / 4 H / 6 M / 4 L) | **42/42 ✓** | 6 |
+
+> **Revisão 2 (após o feedback da correção).** Na primeira entrega, a autenticação dos endpoints sensíveis era *opt-in*: sem `ADMIN_TOKEN`/`AUTH_REQUIRED`, as rotas continuavam abertas, contradizendo os próprios relatórios, que as classificavam como CRITICAL/HIGH. Corrigi a skill (`04-mvc-guidelines.md` §5, T04 do playbook, template do relatório e validação da Fase 3), restaurei os 3 projetos ao código original e rodei a skill de novo. Agora a proteção é **obrigatória e fail-closed**: sem credencial configurada, a rota nega (401). A Fase 3 testa 401 sem token, 401 com token inválido, 401 com a credencial ausente do ambiente e 200 com token válido. Detalhes em [Segurança: autenticação fail-closed](#segurança-autenticação-fail-closed).
 
 ---
 
@@ -100,7 +102,7 @@ Antes de escrever a skill, li os 3 projetos e registrei os problemas encontrados
 4. **Preservação de contrato** (`04-mvc-guidelines.md` §5). Rotas, métodos, status, chaves de entrada e saída, comando de execução e porta continuam iguais. As exceções são só as mudanças de segurança, e cada uma aparece em "Contract notes":
    - campos sensíveis removidos das respostas;
    - endpoints de SQL arbitrário desligados;
-   - autenticação de admin **ativável por variável de ambiente**, para não quebrar os clientes atuais.
+   - autenticação **obrigatória e fail-closed** em todo endpoint citado em finding AP-04. Sem token, com token inválido ou sem a credencial configurada no ambiente, a resposta é 401. Com o token válido, status e formato são os da baseline. Não existe flag que desligue a verificação.
 5. **Fase 3 adaptativa.** A estratégia depende do tipo de projeto: um monolito ou God Class passa por reestruturação completa; um projeto parcialmente em camadas recebe melhoria incremental, mantendo `models/`, `routes/` e `services/` e criando as camadas que faltam.
 6. **Evidência obrigatória.** Todo finding precisa ter `arquivo:linha` conferido no código, e os findings ficam ordenados de CRITICAL a LOW. O Summary tem que bater com a lista de findings.
 
@@ -141,14 +143,18 @@ Antes de escrever a skill, li os 3 projetos e registrei os problemas encontrados
 
 | Desafio | Solução |
 |---|---|
-| Corrigir a segurança sem quebrar os clientes (o smoke exige `GET /api/admin/financial-report` → 200 sem credencial) | Autenticação **ativável por env** (`ADMIN_TOKEN` / `AUTH_REQUIRED`). Sem a variável, o comportamento original é mantido e o boot loga um *warning*. |
+| Corrigir a segurança sem deixar brecha "por padrão" | Na 1ª entrega a auth era *opt-in* (rota aberta sem a variável), justificada por um smoke que eu mesmo tinha escrito esperando 200 anônimo. O enunciado só exige que os endpoints continuem respondendo, e 401 é uma resposta. Na revisão 2 a regra virou **fail-closed** na skill, a mudança 200 → 401 anônimo vai para "Contract notes" e a Fase 3 valida 401/200. |
 | `datetime.utcnow()` → `datetime.now(UTC)` quebra comparações com colunas *naive* do SQLite e muda o `str()` das respostas | O playbook (T08) prescreve um helper `utcnow()` que devolve UTC *naive*. |
 | Provar que a confirmação é real em modo não interativo | Execução em **duas chamadas isoladas**: `claude -p "/refactor-arch"` (Fases 1–2) e depois `claude -p "y" --resume <session_id>` (Fase 3). |
 | Não expor servidores na rede durante os testes | O padrão `HOST=127.0.0.1` vai para a config, e a baseline do app original é capturada com bind local. |
 | Lacuna na minha análise manual do P1 | Conferi no código e adicionei SECRET_KEY hardcoded, SQL Injection e God Module (P1-9 a P1-11). |
 | O sandbox da sessão headless não preservou o `mktemp -d` entre comandos (P3) | A própria skill contornou com um diretório temporário em `$HOME` e limpou tudo no fim. Registrado em `docs/progresso.md`. |
 
-**Iterações:** os 3 projetos passaram na **1ª execução**, sem precisar ajustar os references. O registro completo está em [`docs/progresso.md`](docs/progresso.md).
+**Iterações:**
+1. **Entrega 1:** os 3 projetos passaram na 1ª execução, mas com autenticação *opt-in*.
+2. **Revisão 2 (feedback da correção):** os references foram ajustados para auth fail-closed com validação 401/200. Os 3 projetos foram restaurados ao original e a skill rodou de novo, sem intervenção manual no código gerado. Os 3 passaram na primeira rodada da revisão.
+
+O registro completo está em [`docs/progresso.md`](docs/progresso.md).
 
 ---
 
@@ -158,9 +164,11 @@ Antes de escrever a skill, li os 3 projetos e registrei os problemas encontrados
 
 | Projeto | CRITICAL | HIGH | MEDIUM | LOW | Total | Achados manuais cobertos |
 |---|---|---|---|---|---|---|
-| 1 — code-smells-project | 7 | 3 | 5 | 4 | **19** | 11/11 |
-| 2 — ecommerce-api-legacy | 5 | 4 | 6 | 4 | **19** | 13/13 |
-| 3 — task-manager-api | 3 | 3 | 6 | 4 | **16** | 12/12 |
+| 1 — code-smells-project | 6 | 3 | 5 | 4 | **18** | 11/11 |
+| 2 — ecommerce-api-legacy | 4 | 4 | 5 | 3 | **16** | 13/13 |
+| 3 — task-manager-api | 4 | 4 | 6 | 4 | **18** | 12/12 |
+
+Os números diferem um pouco da entrega 1 porque a skill rodou de novo do zero. A diferença está em como os findings foram agrupados (por exemplo, no P1 o SQL arbitrário de `/admin/query` entrou no finding de SQL Injection), não em problemas perdidos.
 
 Relatórios completos: [`reports/audit-project-1.md`](reports/audit-project-1.md), [`reports/audit-project-2.md`](reports/audit-project-2.md) e [`reports/audit-project-3.md`](reports/audit-project-3.md). A saída da Fase 3 de cada projeto está em `docs/logs/fase3-projeto-N.md`.
 
@@ -171,21 +179,21 @@ APIs deprecated detectadas:
 
 ### Antes / depois
 
-**Projeto 1: monolito, reestruturação completa** (4 arquivos / 780 linhas → 38 arquivos / 1103 linhas)
+**Projeto 1: monolito, reestruturação completa** (4 arquivos / 780 linhas → 37 arquivos / 1141 linhas)
 ```
 ANTES                         DEPOIS
 app.py                        app.py                 # composition root (create_app)
 controllers.py                config/settings.py
-models.py                     models/      database.py, seed.py, produto/usuario/pedido/relatorio/admin_model.py
-database.py                   controllers/ produto/usuario/pedido/relatorio/health/admin_controller.py
-requirements.txt              views/       *_routes.py (Blueprints finos), pagination.py
+models.py                     models/      database.py, seed.py, produto/usuario/pedido/relatorio/sistema_model.py
+database.py                   controllers/ produto/usuario/pedido/relatorio/sistema_controller.py, pagination.py
+requirements.txt              views/       *_routes.py (Blueprints finos), request_utils.py
                               services/    notification_service.py
                               middlewares/ error_handler.py, auth.py
                               validators/  produto/pedido/usuario_validator.py, common.py
                               errors.py
 ```
 
-**Projeto 2: God Class, reestruturação completa** (3 arquivos / 180 linhas → 26 arquivos / 556 linhas)
+**Projeto 2: God Class, reestruturação completa** (3 arquivos / 180 linhas → 25 arquivos / 537 linhas)
 ```
 ANTES                         DEPOIS
 src/app.js                    src/app.js             # composition root + DI
@@ -196,21 +204,21 @@ src/utils.js                  src/database/   connection.js (Promises + transaç
                               src/routes/     checkout, admin, user
                               src/services/   paymentService.js, cacheService.js
                               src/middlewares/ errorHandler.js, asyncHandler.js, auth.js
-                              src/validators/ checkout, pagination   src/errors/HttpError.js
+                              src/validators/ checkout               src/errors/HttpError.js
                               src/utils/      logger.js, password.js (scrypt)
 ```
 
-**Projeto 3: parcialmente em camadas, melhoria incremental** (15 arquivos / 1158 linhas → 37 arquivos / 1475 linhas)
+**Projeto 3: parcialmente em camadas, melhoria incremental** (15 arquivos / 1158 linhas → 38 arquivos / 1455 linhas)
 ```
 ANTES                         DEPOIS
 app.py                        app.py                 # create_app + DI (seed.py continua importando app, db)
 database.py                   database.py            (mantido)
 models/ task, user, category  models/ base.py (CrudMixin) + task, user, category com consultas/agregações
-routes/ task, user, report    routes/ task, user, report, category (novo), system, pagination   ← finos
+routes/ task, user, report    routes/ task, user, report, category (novo), system   ← finos
 services/notification_service services/ notification_service (config injetada), token_service
-utils/helpers.py (morto)      utils/ errors.py, time.py (utcnow naive), numbers.py
+utils/helpers.py (morto)      utils/ errors.py, time.py (utcnow naive), constants.py, stats.py
 seed.py                       seed.py
-                              config/settings.py      controllers/ task, user, category, report
+                              config/settings.py      controllers/ task, user, category, report, system
                               validators/ task, user, category, common   middlewares/ error_handler, auth
 ```
 
@@ -225,7 +233,7 @@ seed.py                       seed.py
 | **Fase 2:** relatório segue o template | ✅ | ✅ | ✅ |
 | Cada finding tem arquivo e linhas exatos | ✅ | ✅ | ✅ |
 | Findings ordenados CRITICAL → LOW | ✅ | ✅ | ✅ |
-| Mínimo de 5 findings | ✅ 19 | ✅ 19 | ✅ 16 |
+| Mínimo de 5 findings | ✅ 18 | ✅ 16 | ✅ 18 |
 | Detecção de APIs deprecated | ✅ (nenhuma, declarado) | ✅ | ✅ |
 | Pausa e pede confirmação antes da Fase 3 | ✅ | ✅ | ✅ |
 | **Fase 3:** estrutura de diretórios segue MVC | ✅ | ✅ | ✅ |
@@ -236,54 +244,128 @@ seed.py                       seed.py
 | Error handling centralizado | ✅ | ✅ | ✅ |
 | Entry point claro | ✅ `app.py` | ✅ `src/app.js` | ✅ `app.py` |
 | Aplicação inicia sem erros | ✅ | ✅ | ✅ |
-| Endpoints originais respondem corretamente | ✅ 14/14 | ✅ 4/4 | ✅ 22/22 |
+| Endpoints originais respondem corretamente | ✅ 65/65 | ✅ 14/14 | ✅ 42/42 |
+| Endpoints sensíveis negam acesso anônimo (401 sem token / 401 sem credencial configurada / 200 com token) | ✅ 10 rotas | ✅ 2 rotas | ✅ 6 rotas (+403 p/ papel insuficiente) |
 
 Validação interna da própria skill (baseline × depois):
-- **P1:** 36/38 requisições iguais; as 2 diferenças são o `/health` sem `secret_key`/`db_path`.
-- **P2:** 11/14 iguais; as 3 diferenças são intencionais: o stack trace em HTML virou 400, e uma requisição que antes **derrubava o processo** agora responde 400.
-- **P3:** 62/62 compatíveis; as únicas diferenças são `password` removido e o token assinado.
+- **P1:** 34/34 requisições com o mesmo status e as mesmas chaves (rotas protegidas chamadas com token); a única diferença é o `/health` sem `secret_key`/`db_path`. Auth: 10 endpoints com 401 sem token, 401 com token inválido, 401 com `ADMIN_TOKEN` ausente e 200/201 com token.
+- **P2:** 11/11 iguais em status e formato. Auth: 2 endpoints com 401 sem token, 401 com token inválido, 401 com `ADMIN_TOKEN` ausente e 200 com token.
+- **P3:** 44/44 status iguais à baseline; as diferenças de chave são só o `password` removido. Auth: 6 endpoints, 45/45 verificações (401 sem token, 401 com token inválido, 401 após restart sem `SECRET_KEY`, 403 com usuário comum, 200/201 com admin).
 
 ### Logs (smoke test externo, `scripts/smoke-projeto-N.sh`, servidores em 127.0.0.1)
 
-<details><summary>Projeto 1: 14/14</summary>
+Em P1 e P2 o smoke roda duas vezes: com `ADMIN_TOKEN` exportado e com o servidor iniciado **sem** a variável, para provar o fail-closed. No P3 o token vem do `POST /login` (admin do seed) e o smoke também testa um usuário comum (403).
+
+<details><summary>Projeto 1: 65/65</summary>
 
 ```
-Python  444 adanrosler    3u  IPv4 0xce58319628b38c7b      0t0  TCP 127.0.0.1:5000 (LISTEN)
+## Servidor com ADMIN_TOKEN definido
 ✓ GET / → 200
 ✓ GET /health → 200
 ✓ GET /produtos → 200
 ✓ GET /produtos/1 → 200
 ✓ GET /produtos/busca?q=mouse → 200
-✓ GET /usuarios → 200
-✓ GET /usuarios/1 → 200
 ✓ POST /login → 200
 ✓ POST /pedidos → 201
-✓ GET /pedidos → 200
 ✓ GET /pedidos/usuario/2 → 200
-✓ PUT /pedidos/1/status → 200
-✓ GET /relatorios/vendas → 200
-✓ POST /produtos → 201
+✓ GET /usuarios (sem token) → 401
+✓ GET /usuarios (token inválido) → 401
+✓ GET /usuarios (com token) → 200
+✓ GET /usuarios/1 (sem token) → 401
+✓ GET /usuarios/1 (token inválido) → 401
+✓ GET /usuarios/1 (com token) → 200
+✓ GET /pedidos (sem token) → 401
+✓ GET /pedidos (token inválido) → 401
+✓ GET /pedidos (com token) → 200
+✓ PUT /pedidos/1/status (sem token) → 401
+✓ PUT /pedidos/1/status (token inválido) → 401
+✓ PUT /pedidos/1/status (com token) → 200
+✓ GET /relatorios/vendas (sem token) → 401
+✓ GET /relatorios/vendas (token inválido) → 401
+✓ GET /relatorios/vendas (com token) → 200
+✓ POST /produtos (sem token) → 401
+✓ POST /produtos (token inválido) → 401
+✓ POST /produtos (com token) → 201
+✓ PUT /produtos/1 (sem token) → 401
+✓ PUT /produtos/1 (token inválido) → 401
+✓ PUT /produtos/1 (com token) → 200
+✓ POST /admin/query (sem token) → 401
+✓ POST /admin/query (token inválido) → 401
+✓ POST /admin/query (com token) → 403
+✓ POST /admin/reset-db (sem token) → 401
+✓ POST /admin/reset-db (token inválido) → 401
+✓ DELETE /produtos/11 (sem token) → 401
+✓ DELETE /produtos/11 (token inválido) → 401
+✓ DELETE /produtos/11 (com token) → 200
+
+## Servidor SEM ADMIN_TOKEN (fail-closed)
+- ADMIN_TOKEN não exportado: verificações com token válido puladas (modo sem credencial)
+✓ GET / → 200
+✓ GET /health → 200
+✓ GET /produtos → 200
+✓ GET /produtos/1 → 200
+✓ GET /produtos/busca?q=mouse → 200
+✓ POST /login → 200
+✓ POST /pedidos → 201
+✓ GET /pedidos/usuario/2 → 200
+✓ GET /usuarios (sem token) → 401
+✓ GET /usuarios (token inválido) → 401
+✓ GET /usuarios/1 (sem token) → 401
+✓ GET /usuarios/1 (token inválido) → 401
+✓ GET /pedidos (sem token) → 401
+✓ GET /pedidos (token inválido) → 401
+✓ PUT /pedidos/1/status (sem token) → 401
+✓ PUT /pedidos/1/status (token inválido) → 401
+✓ GET /relatorios/vendas (sem token) → 401
+✓ GET /relatorios/vendas (token inválido) → 401
+✓ POST /produtos (sem token) → 401
+✓ POST /produtos (token inválido) → 401
+✓ PUT /produtos/1 (sem token) → 401
+✓ PUT /produtos/1 (token inválido) → 401
+✓ POST /admin/query (sem token) → 401
+✓ POST /admin/query (token inválido) → 401
+✓ POST /admin/reset-db (sem token) → 401
+✓ POST /admin/reset-db (token inválido) → 401
+✓ DELETE /produtos/1 (sem token) → 401
+✓ DELETE /produtos/1 (token inválido) → 401
+
+--- server log (sem ADMIN_TOKEN, boot):
+2026-11-06 12:36:24,089 WARNING config.settings: SECRET_KEY não definida; usando chave aleatória (não persiste entre restarts)
+2026-11-06 12:36:24,089 WARNING config.settings: ADMIN_TOKEN não definido; rotas protegidas responderão 401 até a variável ser configurada
+2026-11-06 12:36:24,290 INFO __main__: Servidor iniciado em http://127.0.0.1:5000
+ * Serving Flask app 'app'
+ * Debug mode: off
  * Running on http://127.0.0.1:5000
 ```
 </details>
 
-<details><summary>Projeto 2: 4/4</summary>
+<details><summary>Projeto 2: 14/14</summary>
 
 ```
-node    3289 adanrosler   15u  IPv4 0x4b159b77b602ba46      0t0  TCP 127.0.0.1:3000 (LISTEN)
+## Servidor com ADMIN_TOKEN definido
 ✓ POST /api/checkout → 200
 ✓ POST /api/checkout → 400
-✓ GET /api/admin/financial-report → 200
-✓ DELETE /api/users/1 → 200
-[INFO] LMS API rodando em http://127.0.0.1:3000
+✓ GET /api/admin/financial-report (sem token) → 401
+✓ GET /api/admin/financial-report (token inválido) → 401
+✓ DELETE /api/users/1 (sem token) → 401
+✓ DELETE /api/users/1 (token inválido) → 401
+✓ GET /api/admin/financial-report (com token) → 200
+✓ DELETE /api/users/1 (com token) → 200
+
+## Servidor SEM ADMIN_TOKEN (fail-closed)
+✓ POST /api/checkout → 200
+✓ POST /api/checkout → 400
+✓ GET /api/admin/financial-report (sem token) → 401
+✓ GET /api/admin/financial-report (token inválido) → 401
+✓ DELETE /api/users/1 (sem token) → 401
+✓ DELETE /api/users/1 (token inválido) → 401
+- ADMIN_TOKEN não exportado: verificações com token válido puladas (modo sem credencial)
 ```
-Corpos conferidos com a baseline: checkout → `{"msg":"Sucesso","enrollment_id":2}`; recusado → `Pagamento recusado` (400); o relatório financeiro é idêntico ao da baseline.
 </details>
 
-<details><summary>Projeto 3: 22/22 (após <code>python seed.py</code>)</summary>
+<details><summary>Projeto 3: 42/42 (após <code>python seed.py</code>)</summary>
 
 ```
-Python  4480 adanrosler    4u  IPv4 0x3926342ca45b96fe      0t0  TCP 127.0.0.1:5000 (LISTEN)
 ✓ GET / → 200
 ✓ GET /health → 200
 ✓ GET /tasks → 200
@@ -293,20 +375,39 @@ Python  4480 adanrosler    4u  IPv4 0x3926342ca45b96fe      0t0  TCP 127.0.0.1:5
 ✓ GET /users → 200
 ✓ GET /users/1 → 200
 ✓ GET /users/1/tasks → 200
-✓ GET /reports/summary → 200
-✓ GET /reports/user/1 → 200
 ✓ GET /categories → 200
-✓ POST /login → 200
-✓ POST /users → 201
-✓ PUT /users/:id → 200
+✓ POST /login (admin) → 200
+✓ POST /login (usuário comum) → 200
+✓ GET /reports/summary (sem token) → 401
+✓ GET /reports/summary (token inválido) → 401
+✓ GET /reports/summary (usuário comum) → 403
+✓ GET /reports/user/1 (sem token) → 401
+✓ GET /reports/user/1 (token inválido) → 401
+✓ GET /reports/user/1 (usuário comum) → 403
+✓ GET /reports/summary (admin) → 200
+✓ GET /reports/user/1 (admin) → 200
+✓ POST /users (sem token) → 401
+✓ POST /users (token inválido) → 401
+✓ POST /users (usuário comum) → 403
+✓ POST /users role=admin (admin) → 201
+✓ POST /users role=user (anônimo) → 201
+✓ PUT /users/:id (sem token) → 401
+✓ PUT /users/:id (outro usuário) → 403
+✓ PUT /users/:id (admin) → 200
 ✓ POST /tasks → 201
 ✓ PUT /tasks/:id → 200
 ✓ DELETE /tasks/:id → 200
 ✓ POST /categories → 201
 ✓ PUT /categories/:id → 200
-✓ DELETE /categories/:id → 200
-✓ DELETE /users/:id → 200
- * Running on http://127.0.0.1:5000
+✓ DELETE /categories/5 (sem token) → 401
+✓ DELETE /categories/5 (token inválido) → 401
+✓ DELETE /categories/5 (usuário comum) → 403
+✓ DELETE /categories/:id (admin) → 200
+✓ DELETE /users/5 (sem token) → 401
+✓ DELETE /users/5 (token inválido) → 401
+✓ DELETE /users/5 (usuário comum) → 403
+✓ DELETE /users/:id (admin) → 200
+✓ DELETE /users/:id (admin criado no smoke) → 200
 ```
 </details>
 
@@ -323,36 +424,48 @@ Processando cartão 4111222233334444 na chave pk_live_...
 Log de boot e do checkout no P2 refatorado: a chave vem do ambiente (sem ela, o gateway roda em modo simulado), o cartão aparece mascarado e o servidor escuta só em `127.0.0.1`:
 
 ```
-[WARN] PAYMENT_GATEWAY_KEY não definida; gateway de pagamento em modo simulado
-[WARN] ADMIN_TOKEN não definida; rotas administrativas sem autenticação
-[INFO] LMS API rodando em http://127.0.0.1:3000
-[INFO] Processando pagamento de 497 no cartão ****4444
+[2026-11-06T15:27:14.034Z] WARN PAYMENT_GATEWAY_KEY não definido; gateway de pagamento em modo simulado
+[2026-11-06T15:27:14.035Z] WARN ADMIN_TOKEN não definido; rotas protegidas responderão 401 até ser configurado
+[2026-11-06T15:27:14.040Z] INFO Frankenstein LMS rodando em http://127.0.0.1:3000
+[2026-11-06T15:27:14.062Z] INFO Processando pagamento {"card":"****4444","simulated":true}
 ```
 
 ### Mudanças de comportamento intencionais (segurança)
 
 | Projeto | Mudança |
 |---|---|
-| Todos | Bind padrão `127.0.0.1` (antes `0.0.0.0`) e debug desligado; configuráveis por `HOST`/`PORT`/`DEBUG`. Os segredos vêm do ambiente. |
-| P1 | `senha` sai de `/usuarios`. `secret_key`/`db_path` saem de `/health`. As senhas passam a ser guardadas com hash e são migradas no boot. `POST /admin/query` e `/admin/reset-db` ficam desligados por padrão (`ENABLE_ADMIN_ENDPOINTS=1` para ligar). `ADMIN_TOKEN` opcional. Entradas que antes davam 500 agora dão 400. |
-| P2 | `DELETE /api/users/:id` passa a apagar em cascata, numa transação, e responde "Usuário deletado" (antes admitia dados órfãos). Checkout recusado não cria mais o usuário. Sem `pwd`, a senha é aleatória em vez de "123456". O relatório sai em ordem determinística. `ADMIN_TOKEN` opcional. |
-| P3 | `password` sai de todas as respostas. MD5 → scrypt, com migração no login. O token do `/login` passa a ser assinado. `AUTH_REQUIRED=true` ativa autenticação e papéis. Entradas inválidas dão 400 e os erros saem em JSON. |
+| Todos | Bind padrão `127.0.0.1` (antes `0.0.0.0`) e debug desligado; configuráveis por `HOST`/`PORT`/`APP_DEBUG`. Os segredos vêm do ambiente. |
+| P1 | `senha` sai de `/usuarios`. `secret_key`/`db_path` saem de `/health`. As senhas passam a ser guardadas com hash (scrypt), com migração. Cadastro anônimo com `"tipo":"admin"` é gravado como cliente. **10 rotas exigem `ADMIN_TOKEN`** (`GET /usuarios`, `GET /usuarios/<id>`, `GET /pedidos`, `PUT /pedidos/<id>/status`, `GET /relatorios/vendas`, `POST/PUT/DELETE /produtos`, `POST /admin/query`, `POST /admin/reset-db`). As duas de admin também ficam desligadas por padrão (403 com token, a menos que `ENABLE_ADMIN_ENDPOINTS=1`). Entradas que davam 500 agora dão 400. |
+| P2 | **`GET /api/admin/financial-report` e `DELETE /api/users/:id` exigem `ADMIN_TOKEN`.** O DELETE apaga em cascata, numa transação, e a mensagem não admite mais dados órfãos. Checkout recusado não cria mais o usuário. Sem `pwd`, a senha é aleatória em vez de "123456". O relatório sai em ordem determinística. |
+| P3 | `password` sai de todas as respostas. MD5 → scrypt, com migração no login. O token do `/login` passa a ser assinado e expira. **Sempre exigem token:** `POST /users` com papel acima de `user` (só admin), `PUT /users/<id>` (o próprio usuário ou admin; `role`/`active` só admin), `DELETE /users/<id>` e `DELETE /categories/<id>` (admin), e `GET /reports/*` (admin/manager). Entradas inválidas dão 400 e os erros saem em JSON. |
 
-**Trade-off de segurança:** a autenticação das rotas administrativas e sensíveis é *opt-in*, via variável de ambiente. Isso preserva os contratos originais que o desafio exige: por exemplo, o smoke espera `GET /api/admin/financial-report` → 200 sem credencial. Sem a variável, as rotas continuam abertas e o boot loga um aviso. **Em produção, defina `ADMIN_TOKEN` (P1 e P2) e `AUTH_REQUIRED=true` (P3)** para que essas rotas passem a exigir `Authorization: Bearer <token>`.
+### Segurança: autenticação fail-closed
+
+Todo endpoint citado em finding AP-04 passa a exigir credencial, **sem chave de liga/desliga**:
+
+| Situação | P1 / P2 (credencial estática `ADMIN_TOKEN`) | P3 (token assinado do `/login`) |
+|---|---|---|
+| Sem header `Authorization` | 401 | 401 |
+| Token inválido | 401 | 401 |
+| Credencial não configurada no servidor | **401** (ninguém acessa; o boot loga um *warning*) | Sem `SECRET_KEY`, a chave aleatória do boot invalida tokens antigos → 401 |
+| Usuário autenticado sem o papel exigido | — | 403 |
+| Token válido | 200/201, mesmo corpo da baseline | 200/201, mesmo corpo da baseline |
+
+O status anônimo dessas rotas passou de 200 para 401. É uma mudança intencional de contrato, registrada em "Contract notes" de cada `docs/logs/fase3-projeto-N.md`. As demais rotas mantêm o contrato original.
 
 ### Como a skill se comportou em stacks diferentes
 
-- **Monolito Python (P1):** reestruturação completa, com o maior número de CRITICAL (7). Detectou o bypass de login por SQL Injection e o *escalonamento* do AP-06 (debug + `0.0.0.0` → CRITICAL), exatamente como o catálogo define.
+- **Monolito Python (P1):** reestruturação completa, com o maior número de CRITICAL (6) e de endpoints protegidos (10). Detectou o bypass de login por SQL Injection e o *escalonamento* do AP-06 (debug + `0.0.0.0` → CRITICAL), exatamente como o catálogo define.
 - **Node/Express (P2):** a mesma skill trocou o vocabulário sozinha: Promises e `async/await` no lugar de callbacks, factory functions para DI e `asyncHandler`. Manteve os erros em **texto puro** onde o original respondia texto, preservando o contrato. Também identificou um bug latente que derrubava o processo (`card` não-string).
 - **Projeto em camadas (P3):** escolheu a estratégia **incremental**. Manteve `models/`, `routes/`, `services/` e `seed.py`, criou só o que faltava, moveu o CRUD de categorias para o lugar certo e removeu código morto. O `python seed.py` continuou funcionando.
-- **Custo e tempo** (Fases 1–2 / Fase 3): P1 ~US$0,75 / ~US$2,39 (9,7 min); P2 ~US$0,63 / ~US$1,74 (4,2 min); P3 ~US$0,86 / ~US$3,34 (8,4 min).
+- **Custo e tempo da revisão 2** (Fases 1–2 / Fase 3): P1 ~US$0,80 / ~US$2,73 (6,8 min); P2 ~US$0,67 / ~US$1,94 (6,7 min); P3 ~US$0,93 / ~US$3,51 (8,4 min).
 
 ---
 
 ## D) Como Executar
 
 ### Pré-requisitos
-- [Claude Code](https://docs.claude.com/en/docs/claude-code) instalado e autenticado (`claude --version`; testado com 2.1.314).
+- [Claude Code](https://docs.claude.com/en/docs/claude-code) instalado e autenticado (`claude --version`; testado com 2.1.319).
 - Python 3.12+ com `venv` (P1 e P3) e Node.js 18+ com npm (P2).
 - Preparar os ambientes:
   ```bash
@@ -386,22 +499,33 @@ Cada bloco é independente e começa na raiz do repositório. O servidor sobe em
 REPO=$(git rev-parse --show-toplevel)   # raiz do repositório
 wait_for() { until curl -s -o /dev/null "$1"; do sleep 1; done; }
 
-# Projeto 1 — code-smells-project (porta 5000)
+# Projeto 1 — code-smells-project (porta 5000): com token e depois sem a credencial (fail-closed)
 cd "$REPO/code-smells-project"
+export ADMIN_TOKEN=$(openssl rand -hex 16)
 .venv/bin/python app.py > /tmp/p1.log 2>&1 & PID=$!
 wait_for http://127.0.0.1:5000/
-bash "$REPO/scripts/smoke-projeto-1.sh" http://127.0.0.1:5000
+bash "$REPO/scripts/smoke-projeto-1.sh" http://127.0.0.1:5000   # 401 sem token, 200 com token
+kill $PID; unset ADMIN_TOKEN; rm -f loja.db
+.venv/bin/python app.py > /tmp/p1b.log 2>&1 & PID=$!
+wait_for http://127.0.0.1:5000/
+bash "$REPO/scripts/smoke-projeto-1.sh" http://127.0.0.1:5000   # rotas protegidas seguem em 401
 kill $PID
 
-# Projeto 2 — ecommerce-api-legacy (porta 3000)
+# Projeto 2 — ecommerce-api-legacy (porta 3000): idem
 cd "$REPO/ecommerce-api-legacy"
+export ADMIN_TOKEN=$(openssl rand -hex 16)
 node src/app.js > /tmp/p2.log 2>&1 & PID=$!     # o mesmo que "npm start"
 wait_for http://127.0.0.1:3000/                 # a rota "/" responde 404, mas já indica que o servidor subiu
 bash "$REPO/scripts/smoke-projeto-2.sh" http://127.0.0.1:3000
+kill $PID; unset ADMIN_TOKEN
+node src/app.js > /tmp/p2b.log 2>&1 & PID=$!
+wait_for http://127.0.0.1:3000/
+bash "$REPO/scripts/smoke-projeto-2.sh" http://127.0.0.1:3000
 kill $PID
 
-# Projeto 3 — task-manager-api (porta 5000; seed antes)
+# Projeto 3 — task-manager-api (porta 5000; seed antes; o smoke obtém o token via /login)
 cd "$REPO/task-manager-api"
+export SECRET_KEY=$(openssl rand -hex 32)
 .venv/bin/python seed.py
 .venv/bin/python app.py > /tmp/p3.log 2>&1 & PID=$!
 wait_for http://127.0.0.1:5000/
@@ -410,7 +534,9 @@ kill $PID
 ```
 Todas as linhas do smoke devem começar com `✓`. O log de cada servidor fica em `/tmp/pN.log`.
 
-Variáveis de ambiente opcionais, documentadas no README de cada projeto: `SECRET_KEY`, `HOST`, `PORT`, `DEBUG`/`APP_DEBUG`, `LOG_LEVEL`, `ADMIN_TOKEN` (P1/P2), `ENABLE_ADMIN_ENDPOINTS` (P1), `PAYMENT_GATEWAY_KEY` (P2), `AUTH_REQUIRED`, `CORS_ORIGINS`, `SMTP_*` (P3).
+**Credenciais necessárias para usar as rotas protegidas:** `ADMIN_TOKEN` (P1/P2); no P3, o token do `POST /login` (com `SECRET_KEY` definida para os tokens sobreviverem a restarts). Sem elas, essas rotas respondem 401.
+
+Demais variáveis, documentadas no README de cada projeto: `SECRET_KEY`, `HOST`, `PORT`, `APP_DEBUG`, `LOG_LEVEL`, `APP_ENV`/`DATABASE_PATH`/`ENABLE_ADMIN_ENDPOINTS` (P1), `PAYMENT_GATEWAY_KEY`/`DB_FILE` (P2), `DATABASE_URL`/`TOKEN_MAX_AGE_SECONDS`/`SMTP_*` (P3).
 
 ### Estrutura do repositório
 ```

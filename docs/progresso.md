@@ -20,6 +20,7 @@ Decisões tomadas:
 - **Preservação de contrato** como regra explícita (§5 das guidelines). Mudanças de segurança
   permitidas: remover campos sensíveis das respostas, remover endpoints de SQL arbitrário/reset,
   auth de admin **ativável por env** (`ADMIN_TOKEN`) para não quebrar clientes/baseline.
+  *(Revertido na Revisão 2: ver abaixo.)*
 - `datetime.utcnow` → helper que devolve UTC *naive*, para não quebrar comparações com
   colunas SQLite nem o formato de `str(datetime)` das respostas.
 - Baseline do app original capturada com bind local: Flask via `flask run --host 127.0.0.1`;
@@ -73,8 +74,8 @@ Decisões tomadas:
   comandos; a skill contornou usando `~/refactor-arch-tmp.*` e limpou ao final.
 
 ## Resumo das iterações
-Nenhuma iteração extra foi necessária: os 3 projetos passaram na 1ª execução (critérios de
-aceite e smoke externo). Os references não foram alterados após a Etapa 1.
+Entrega 1: nenhuma iteração extra foi necessária; os 3 projetos passaram na 1ª execução.
+Revisão 2: references alterados após o feedback da correção (ver "Revisão 2" no fim).
 
 ## Etapa 5 — README final ✅
 - `README.md` reescrito com as seções A (análise manual), B (construção da skill), C (resultados:
@@ -82,3 +83,37 @@ aceite e smoke externo). Os references não foram alterados após a Etapa 1.
   mudanças intencionais, comportamento por stack) e D (como executar).
 - Skills nos 3 projetos conferidas com `diff -r`: idênticas.
 - Status: desafio concluído; nenhum bloqueio pendente.
+
+## Revisão 2 — feedback da correção: autenticação fail-closed (2026-11-06)
+
+**Feedback:** os relatórios classificavam endpoints sem auth como CRITICAL/HIGH, mas o código
+gerado deixava essas rotas abertas por padrão (sem `ADMIN_TOKEN`, P1/P2 respondiam 200
+anônimo; sem `AUTH_REQUIRED`, o P3 deixava qualquer um criar usuário admin).
+
+**Correções na skill** (idênticas nas 3 cópias, conferido com `diff -r`):
+- `04-mvc-guidelines.md` §5: proteção de endpoints AP-04 obrigatória e fail-closed. Sem a
+  credencial configurada → 401. "Modo compatível" e flag opt-in proibidos. A mudança 200 → 401
+  anônimo vai para "Contract notes". Checklist §7 com item de auth.
+- `05-refactoring-playbook.md` T04: exemplos Python/JS fail-closed, auth por usuário sempre
+  ligada (401/403) e bloqueio de escalonamento de papel.
+- `03-report-template.md`: recomendação de AP-04 sempre fail-closed, listando os endpoints.
+- `SKILL.md` Fase 3: credencial de teste no plano de requisições; validação obrigatória com
+  401 sem token, 401 com token inválido, 401 com a credencial ausente (restart sem a variável),
+  403 por papel e 200 com token; nova linha na saída de validação.
+
+**Reexecução:** os 3 projetos foram restaurados ao código original (`0d32032`) e a skill
+rodou de novo em 2 chamadas headless (`/refactor-arch` → `y --resume`):
+
+| Projeto | Fases 1–2 | Fase 3 | Findings | Rotas protegidas | Smoke externo |
+|---|---|---|---|---|---|
+| P1 | 10 turnos, US$0,80 | 26 turnos, 6,8 min, US$2,73 | 18 (6/3/5/4) | 10 | 65/65 ✓ (com e sem `ADMIN_TOKEN`) |
+| P2 | 7 turnos, US$0,67 | 43 turnos, 6,7 min, US$1,94 | 16 (4/4/5/3) | 2 | 14/14 ✓ (com e sem `ADMIN_TOKEN`) |
+| P3 | 11 turnos, US$0,93 | 37 turnos, 8,4 min, US$3,51 | 18 (4/4/6/4) | 6 | 42/42 ✓ (admin, usuário comum, anônimo) |
+
+- Smoke scripts reescritos: 401 sem token e com token inválido, 200 com token, 403 por papel
+  (P3). P1/P2 rodados também com o servidor **sem** `ADMIN_TOKEN` (rotas seguem em 401).
+- Observações: nas Fases 3 de P1 e P3, a sessão headless rodou `git rm --cached` ao apagar
+  arquivos antigos e depois restaurou o índice (relatado na própria saída). O P1 deixou 3
+  entradas soltas no índice, na raiz (`controllers.py`, `database.py`, `models.py`), que
+  removi antes do commit. No P2, a porta 3000 também tinha um `next-server` ouvindo em `*`;
+  a skill validou que o app escutava em `127.0.0.1:3000` antes de contar os testes.
